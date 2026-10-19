@@ -5,6 +5,7 @@ const { PROVIDERS, makeSendScript, makeReadScript } = require("./ai-automation")
 let mainWindow = null;
 const providerWindows = new Map();
 const submittedPrompts = new Map();
+const baselineReplies = new Map();
 
 function notify(message, detail = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -77,8 +78,16 @@ async function sendPrompt(id, prompt) {
   if (!win || win.isDestroyed()) return { ok: false, id, label: provider.label, message: "Open this AI website first, then sign in if required." };
   if (win.webContents.isLoading()) return { ok: false, id, label: provider.label, message: "The AI website is still loading. Try again in a moment." };
   try {
+    let baseline = "";
+    try {
+      const before = await win.webContents.executeJavaScript(makeReadScript(id, submittedPrompts.get(id) || ""));
+      baseline = (before.text || "").trim();
+    } catch {}
     const result = await win.webContents.executeJavaScript(makeSendScript(id, prompt));
-    if (result.ok) submittedPrompts.set(id, prompt);
+    if (result.ok) {
+      submittedPrompts.set(id, prompt);
+      baselineReplies.set(id, baseline);
+    }
     return { ...result, id, label: provider.label };
   } catch (error) {
     return { ok: false, id, label: provider.label, message: "Could not submit prompt: " + error.message };
@@ -90,8 +99,10 @@ async function readReply(id) {
   if (!win || win.isDestroyed()) return { ok: false, id, label: provider.label, message: "AI website window is closed." };
   try {
     const result = await win.webContents.executeJavaScript(makeReadScript(id, submittedPrompts.get(id) || ""));
-    return { ok: Boolean(result.text), id, label: provider.label, ...result,
-      message: result.text ? "Reply detected." : "No reply detected yet. The website layout may have changed, or the AI may still be responding." };
+    const isOldReply = Boolean(result.text && baselineReplies.get(id) && result.text.trim() === baselineReplies.get(id));
+    const text = isOldReply ? "" : result.text;
+    return { ok: Boolean(text), id, label: provider.label, ...result, text,
+      message: text ? "Reply detected." : "No new reply detected yet. The AI may still be responding, or the website layout may have changed." };
   } catch (error) {
     return { ok: false, id, label: provider.label, message: "Could not inspect reply: " + error.message };
   }

@@ -35,7 +35,11 @@ function makeSendScript(providerId, prompt) {
     composer.focus();
     if (composer.isContentEditable || composer.getAttribute("contenteditable") === "true") {
       try {
-        document.execCommand("selectAll", false);
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(composer);
+        selection.removeAllRanges();
+        selection.addRange(range);
         document.execCommand("insertText", false, text);
       } catch {}
       if ((composer.innerText || "").trim() !== text.trim()) {

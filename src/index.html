@@ -10,7 +10,7 @@
 <section class="panel"><span class="pill">AI COUNCIL · MANUAL COLLECTION</span><h2>Collect replies from multiple AIs</h2>
 <p class="muted">Enter a task, copy the shared context into each AI website, then paste each response into its card. Replies are collected together into one round and saved on this device. This version does not automatically read other websites or send messages to them.</p>
 <label class="label" for="task">Task / question for the council</label><textarea id="task" placeholder="Describe what you want the AI council to solve…"></textarea>
-<div class="row"><label class="label" for="round">Round</label><input id="round" type="number" id="round" min="1" max="99" value="1" style="max-width:90px"><button id="copyPrompt">Copy task for AIs</button><button id="newRound" class="secondary">Start next round</button><button id="clear" class="danger">Clear session</button></div>
+<div class="row"><label class="label" for="round">Round</label><input id="round" type="number" min="1" max="99" value="1" style="max-width:90px"><button id="copyPrompt">Copy task for AIs</button><button id="newRound" class="secondary">Start next round</button><button id="clear" class="danger">Clear session</button></div>
 <p id="mainStatus" class="status" role="status">Ready. Replies are stored locally in this app.</p></section>
 <section class="grid" id="agents">
 <article class="card" data-agent="ChatGPT"><h3>ChatGPT · Director</h3><p class="muted">Reasoning, review, final synthesis</p><textarea class="reply" aria-label="ChatGPT reply" placeholder="Paste ChatGPT's reply here…"></textarea><button class="collect">Collect reply</button><p class="status"></p></article>

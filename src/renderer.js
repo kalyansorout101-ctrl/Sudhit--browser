@@ -98,26 +98,21 @@ function buildCouncilPrompt() {
   const task = requireTask();
   if (!task) return "";
   const shared = entries.length
-    ? entries.map(item => "ROUND " + item.round + " · " + item.agent + (item.partial ? " (partial)" : "") + "\\n" + item.reply).join("\\n\\n")
+    ? entries.map(item => "ROUND " + item.round + " · " + item.agent + (item.partial ? " (partial)" : "") + "\n" + item.reply).join("\n\n")
     : "No previous replies collected yet.";
-  return "TASK FOR THE SUDHIT AI COUNCIL\\n" + task +
-    "\\n\\nPREVIOUS SHARED REPLIES\\n" + shared +
-    "\\n\\nWork on the task independently. Consider the previous replies, explain disagreements or risks, and provide your recommendation.";
+  return "TASK FOR THE SUDHIT AI COUNCIL\n" + task +
+    "\n\nPREVIOUS SHARED REPLIES\n" + shared +
+    "\n\nWork on the task independently. Consider the previous replies, explain disagreements or risks, and provide your recommendation.";
 }
-
 taskEl.addEventListener("input", save);
 roundEl.addEventListener("change", () => {
   roundEl.value = String(getRound());
   render();
 });
 document.getElementById("copyPrompt").addEventListener("click", () => {
-  const prompt = requireTask();
+  const prompt = buildCouncilPrompt();
   if (!prompt) return;
-  copyText(
-    "TASK FOR THE SUDHIT AI COUNCIL\n" + prompt +
-    "\n\nCURRENT SHARED CONTEXT\n" + transcriptText() +
-    "\n\nReply with your recommendation, assumptions, risks, and questions. Review the other collected replies above before responding."
-  );
+  copyText(prompt);
 });
 document.getElementById("copyTranscript").addEventListener("click", () => copyText(transcriptText()));
 document.getElementById("newRound").addEventListener("click", () => {

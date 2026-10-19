@@ -17,7 +17,7 @@ function makeSendScript(providerId, prompt) {
       const r = el.getBoundingClientRect(), s = getComputedStyle(el);
       return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
     };
-    const authPath = /\/(?:login|log-in|signin|sign-in|auth)(?:\/|$)/i.test(location.pathname);
+    const authPath = new RegExp("/(?:login|log-in|signin|sign-in|auth)(?:/|$)", "i").test(location.pathname);
     const credentialFields = [...document.querySelectorAll('input[type="password"], input[autocomplete="current-password"], input[type="email"], input[autocomplete="username"]')].filter(visible);
     const loginCopy = /sign in to continue|log in to continue|continue with email|enter your email to continue/i.test((document.body?.innerText || "").slice(0, 5000));
     if (authPath || credentialFields.some(el => el.type === "password" || el.autocomplete === "current-password") ||

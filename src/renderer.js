@@ -94,6 +94,16 @@ function requireTask() {
   }
   return prompt;
 }
+function buildCouncilPrompt() {
+  const task = requireTask();
+  if (!task) return "";
+  const shared = entries.length
+    ? entries.map(item => "ROUND " + item.round + " · " + item.agent + (item.partial ? " (partial)" : "") + "\\n" + item.reply).join("\\n\\n")
+    : "No previous replies collected yet.";
+  return "TASK FOR THE SUDHIT AI COUNCIL\\n" + task +
+    "\\n\\nPREVIOUS SHARED REPLIES\\n" + shared +
+    "\\n\\nWork on the task independently. Consider the previous replies, explain disagreements or risks, and provide your recommendation.";
+}
 
 taskEl.addEventListener("input", save);
 roundEl.addEventListener("change", () => {
@@ -201,7 +211,7 @@ for (const card of document.querySelectorAll("[data-provider]")) {
   });
 
   card.querySelector(".sendProvider").addEventListener("click", async () => {
-    const prompt = requireTask();
+    const prompt = buildCouncilPrompt();
     if (!prompt) return;
     const button = card.querySelector(".sendProvider");
     button.disabled = true;
@@ -253,7 +263,7 @@ document.getElementById("openAll").addEventListener("click", async () => {
 
 document.getElementById("refreshProviders").addEventListener("click", refreshProviders);
 document.getElementById("runCouncil").addEventListener("click", async () => {
-  const prompt = requireTask();
+  const prompt = buildCouncilPrompt();
   if (!prompt) return;
   const button = document.getElementById("runCouncil");
   button.disabled = true;
@@ -278,7 +288,6 @@ document.getElementById("runCouncil").addEventListener("click", async () => {
     mainStatus.textContent = "Council run failed: " + error.message;
   } finally {
     button.disabled = false;
-    await refreshProviders();
   }
 });
 

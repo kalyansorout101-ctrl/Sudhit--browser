@@ -99,8 +99,15 @@ async function readReply(id) {
   if (!win || win.isDestroyed()) return { ok: false, id, label: provider.label, message: "AI website window is closed." };
   try {
     const result = await win.webContents.executeJavaScript(makeReadScript(id, submittedPrompts.get(id) || ""));
-    const isOldReply = Boolean(result.text && baselineReplies.get(id) && result.text.trim() === baselineReplies.get(id));
-    const text = isOldReply ? "" : result.text;
+    let text = (result.text || "").trim();
+    const baseline = (baselineReplies.get(id) || "").trim();
+    if (baseline && text === baseline) {
+      text = "";
+    } else if (baseline && text.includes(baseline)) {
+      text = text.replace(baseline, "").trim();
+      const currentPrompt = (submittedPrompts.get(id) || "").trim();
+      if (currentPrompt) text = text.replace(currentPrompt, "").trim();
+    }
     return { ok: Boolean(text), id, label: provider.label, ...result, text,
       message: text ? "Reply detected." : "No new reply detected yet. The AI may still be responding, or the website layout may have changed." };
   } catch (error) {

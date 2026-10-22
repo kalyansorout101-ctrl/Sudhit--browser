@@ -478,7 +478,7 @@ async function runCouncil(data) {
     };
   }
 
-  while (finished.size < ids.length && Date.now() < run.deadline && !run.cancelled) {
+  while (finished.size < ids.length && (run.paused || Date.now() < run.deadline) && !run.cancelled) {
     if (run.paused) {
       await delay(200);
       continue;

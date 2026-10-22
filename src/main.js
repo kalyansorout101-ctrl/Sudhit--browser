@@ -191,6 +191,7 @@ async function createTab({ id, title, url, partition = "persist:sudhit-browser",
     notifyBrowserChanged();
   } catch (error) {
     notify("Could not load " + url + ": " + error.message, { providerId });
+    removeTab(tab.id);
     return { ...tab, loadError: error.message };
   }
   return tab;

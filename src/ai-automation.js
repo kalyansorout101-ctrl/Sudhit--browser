@@ -93,11 +93,35 @@ function makeReadScript(providerId, prompt) {
       return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
     };
     const preferred = {
-      chatgpt: ["[data-message-author-role='assistant']"],
-      claude: ["[data-testid='assistant-message']", "[data-testid='chat-message'] .font-claude-message", ".font-claude-message", "div[class*='assistant-message']"],
-      grok: ["[data-testid='response-content']", "[data-testid='message-content']", "[data-testid='answer-content']", "div[class*='response-content']"]
+      chatgpt: [
+        "[data-message-author-role='assistant']",
+        "main [data-testid*='conversation-turn'] [data-message-author-role='assistant']"
+      ],
+      claude: [
+        "[data-testid='assistant-message']",
+        "[data-testid='chat-message'] .font-claude-message",
+        ".font-claude-message",
+        "[data-testid*='message-content']",
+        "main [class*='assistant-message']"
+      ],
+      grok: [
+        "[data-testid='response-content']",
+        "[data-testid='message-content']",
+        "[data-testid='answer-content']",
+        "main [class*='response-content']"
+      ]
     };
-    const fallback = ["main .prose", "main [class*='markdown']", "main article", "main [data-testid*='message']", "main [class*='message-content']"];
+    const fallback = [
+      "main [data-message-author-role='assistant']",
+      "main [data-testid*='assistant-message']",
+      "main [data-testid*='message-content']",
+      "main [class*='assistant-message']",
+      "main [class*='message-content']",
+      "main .prose",
+      "main [class*='markdown']",
+      "main article",
+      "main [data-testid*='message']"
+    ];
     const prompt = (sentPrompt || "").trim();
     function clean(el) {
       const value = (el.innerText || el.textContent || "").trim();

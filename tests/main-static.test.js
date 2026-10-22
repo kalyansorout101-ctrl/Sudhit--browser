@@ -39,6 +39,13 @@ test("renderer IPC is allowlisted and rejects foreign renderer senders", () => {
   assert.match(preload, /stopCouncil/);
 });
 
+test("browser state render preserves the New Tab button before replacing tabs", () => {
+  const preserveButton = renderer.indexOf('const newTabButton = document.getElementById("newBrowserTab")');
+  const replaceChildren = renderer.indexOf("browserTabsEl.replaceChildren()", preserveButton);
+  const appendButton = renderer.indexOf("browserTabsEl.appendChild(newTabButton)", replaceChildren);
+  assert.ok(preserveButton >= 0 && replaceChildren > preserveButton && appendButton > replaceChildren);
+});
+
 test("integrated browser and council approval requirements are present", () => {
   assert.match(main, /MAX_TABS\s*=\s*24/);
   assert.match(main, /normalizeBrowserUrl/);

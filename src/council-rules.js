@@ -1,7 +1,7 @@
 const MAX_TASK_CHARS = 30000;
 const MAX_COUNCIL_PROMPT_CHARS = 60000;
-const MAX_REPLY_CHARS = 100000;
-const MAX_ENTRIES = 300;
+const MAX_REPLY_CHARS = 25000;
+const MAX_ENTRIES = 50;
 const VALID_PROTOCOLS = new Set(["http:", "https:"]);
 
 function isHttpUrl(raw) {

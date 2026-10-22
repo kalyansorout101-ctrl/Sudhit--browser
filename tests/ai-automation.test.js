@@ -29,3 +29,12 @@ test("generated response collection scripts parse and include provider-specific 
     assert.ok(script.includes(provider.id));
   }
 });
+
+test("response collection scripts include resilient fallback selectors", () => {
+  for (const id of Object.keys(PROVIDERS)) {
+    const script = makeReadScript(id, "task prompt");
+    assert.ok(script.includes("main [data-message-author-role='assistant']"));
+    assert.ok(script.includes("main [class*='message-content']"));
+    assert.ok(script.includes("main [class*='markdown']"));
+  }
+});

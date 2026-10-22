@@ -125,6 +125,9 @@ function attachTabHandlers(tab) {
   contents.on("will-navigate", (event, url) => {
     if (!safeWebUrl(url)) event.preventDefault();
   });
+  contents.on("will-redirect", (event, url) => {
+    if (!safeWebUrl(url)) event.preventDefault();
+  });
   contents.setWindowOpenHandler(({ url }) => {
     if (safeWebUrl(url) && tabs.size < MAX_TABS) {
       setImmediate(() => {
@@ -370,6 +373,9 @@ async function readReply(id) {
   const tab = tabId ? tabs.get(tabId) : null;
   if (!tab || tab.view.webContents.isDestroyed()) {
     return { ok: false, id, label: provider.label, message: "AI website tab is closed." };
+  }
+  if (!submittedPrompts.has(id)) {
+    return { ok: false, id, label: provider.label, message: "No prompt has been submitted through SUDHIT in this session. Use Send task first, or paste the reply manually." };
   }
   try {
     const result = await tab.view.webContents.executeJavaScript(makeReadScript(id, submittedPrompts.get(id) || ""));

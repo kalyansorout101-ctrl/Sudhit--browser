@@ -209,7 +209,7 @@ function addEntry(agent, reply, options = {}) {
   if (!text) return false;
   const round = options.round || getRound();
   text = text.slice(0, MAX_REPLY_CHARS);
-  const duplicate = entries.some((item) => item.round === round && item.agent === agent && item.reply === text);
+  const duplicate = entries.some((item) => item.taskRevision === taskRevision && item.round === round && item.agent === agent && item.reply === text);
   if (duplicate) return false;
   if (entries.length >= 300) {
     entries.shift();
@@ -292,7 +292,7 @@ function renderBrowserState(state) {
     const item = document.createElement("div");
     item.className = "tabItem";
     item.setAttribute("role", "presentation");
-    item.setAttribute("aria-selected", state.activeTabId === tab.id ? "true" : "false");
+    item.dataset.active = state.activeTabId === tab.id ? "true" : "false";
     const button = document.createElement("button");
     button.className = "browserTab";
     button.type = "button";

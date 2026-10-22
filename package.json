@@ -1,7 +1,7 @@
 {
   "name": "sudhit-browser",
-  "version": "0.1.0",
-  "description": "SUDHIT Browser desktop starter",
+  "version": "0.2.0",
+  "description": "SUDHIT Browser with integrated multi-AI council tabs",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",

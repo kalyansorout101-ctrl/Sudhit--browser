@@ -1,33 +1,37 @@
 # SUDHIT Browser
 
-Electron desktop prototype for the SUDHIT multi-AI council.
+Desktop Electron browser with an integrated AI Council dashboard.
 
-## Current milestone: website reply collection preview
+## Browser features
 
-- Opens separate ChatGPT, Claude, and Grok website windows.
-- Uses an isolated persistent browser profile per provider, so website sign-in sessions can persist locally.
-- Provides explicit controls to open/focus a website, send the council task, collect the latest visible reply, or run a multi-site send-and-collect round.
-- Sends a shared transcript with prior collected replies in later rounds.
-- Detects response text with best-effort provider DOM selectors and waits for a stable, non-generating result.
-- Saves the council transcript locally in the app and exports it as text.
-- Keeps manual paste collection as a fallback if a provider changes its page structure.
+- Integrated tab bar with an always-available AI Council tab.
+- In-app website tabs with address/search bar, back, forward, reload, new tab, and close tab.
+- Navigation accepts HTTP/HTTPS URLs and sends plain text to DuckDuckGo search.
+- Ctrl+T, Ctrl+W, Ctrl+L, Ctrl+R, Ctrl+Tab, and Alt+Left/Right shortcuts (Command instead of Control on macOS).
+- Browser context menu with copy, cut, paste, select all, and reload where applicable.
+- Copy/Paste toolbar controls for the active website tab.
+- Persistent isolated browser profiles for ChatGPT, Claude, and Grok.
+- AI prompt submission and best-effort reply collection in the provider's own tab.
+- Shared council transcript, manual reply paste fallback, local session storage, and text export.
+- Website tabs run with context isolation, no Node.js integration, sandboxing, and HTTP/HTTPS navigation validation.
 
-## Important limitations
+## AI Council limitations
 
-This is an early prototype, not a full Chromium-style tabbed browser. Website DOM selectors can break when providers change their interfaces, and automatic prompt submission or extraction is not guaranteed. The app has not yet been manually tested against signed-in live AI websites. Users must sign in themselves and complete any normal verification in each provider window; the app does not bypass login or verification. Review AI responses before relying on them.
+SUDHIT automates visible website interfaces, not provider APIs. Automatic submission and reply extraction remain best-effort because each provider can change its page structure. You must sign in yourself and complete any normal verification. The application does not bypass sign-in or verification. Review AI replies before relying on them. Use only accounts and websites you are authorized to access, and follow each service's terms.
 
-This prototype does not use provider APIs. It automates the visible website UI on a best-effort basis. Only use accounts and websites you are authorized to access, and follow each service's rules.
+The desktop UI and browser navigation have not yet been runtime-verified in this change. A Windows GitHub Actions workflow now installs dependencies, runs automated tests, builds an NSIS installer, and uploads the resulting installer when all steps pass.
 
 ## Build on Windows
 
-Requires Node.js 22:
-- `npm install`
-- `npm test`
-- `npm start`
-- `npm run dist:win`
+Requires Node.js 22.
 
-## Hosted Windows build
+```powershell
+npm install
+npm test
+npm start
+npm run dist:win
+```
 
-The GitHub Actions workflow checks JavaScript syntax, runs helper tests, and builds a Windows NSIS installer on `windows-latest`. Push to `main` or manually run **Build Windows Installer** from the Actions tab. Download the `SUDHIT-Browser-Windows-Installer` artifact if the run succeeds.
+The Windows installer is created in `dist/`. GitHub Actions uploads it as the `SUDHIT-Browser-Windows-Installer` artifact after a successful workflow run.
 
 Never commit passwords, session cookies, API keys, or other secrets.

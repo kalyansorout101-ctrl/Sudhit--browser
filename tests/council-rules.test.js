@@ -46,6 +46,7 @@ test("next round and final approval require both council gates and replies", () 
   assert.equal(canApproveFinal({ round: 1, approvals, entries }), true);
   assert.equal(canApproveFinal({ round: 99, approvals, entries: entries.map((item) => ({ ...item, round: 99 })) }), true);
   assert.equal(canStartNextRound({ round: 99, approvals, entries: entries.map((item) => ({ ...item, round: 99 })) }), false);
+  assert.equal(canStartNextRound({ round: 1, approvals: { ...approvals, user: "approved" }, entries }), false);
   assert.equal(canStartNextRound({ round: 1, approvals: { director: "approved" }, entries }), false);
   assert.equal(canStartNextRound({ round: 1, approvals, entries: entries.filter(x => x.agent !== "Grok") }), false);
 });

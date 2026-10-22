@@ -44,8 +44,8 @@ function getBrowserState() {
       title: tab.title,
       url: tab.url,
       providerId: tab.providerId || null,
-      canGoBack: tab.view.webContents.canGoBack(),
-      canGoForward: tab.view.webContents.canGoForward(),
+      canGoBack: tab.view.webContents.navigationHistory.canGoBack(),
+      canGoForward: tab.view.webContents.navigationHistory.canGoForward(),
       loading: tab.view.webContents.isLoading()
     });
   }
@@ -70,8 +70,15 @@ function layoutBrowserViews() {
         width: Math.max(1, bounds.width),
         height: Math.max(1, bounds.height - BROWSER_CHROME_HEIGHT)
       });
+      tab.view.setVisible(true);
     } else {
-      tab.view.setBounds({ x: 0, y: BROWSER_CHROME_HEIGHT, width: 0, height: 0 });
+      tab.view.setBounds({
+        x: 0,
+        y: BROWSER_CHROME_HEIGHT,
+        width: Math.max(1, bounds.width),
+        height: Math.max(1, bounds.height - BROWSER_CHROME_HEIGHT)
+      });
+      tab.view.setVisible(false);
     }
   }
 }
@@ -227,8 +234,9 @@ function createMainWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  const dashboardUrl = require("node:url").pathToFileURL(path.join(__dirname, "index.html")).href;
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith("file://")) event.preventDefault();
+    if (url.split(/[?#]/, 1)[0] !== dashboardUrl) event.preventDefault();
   });
   mainWindow.on("resize", layoutBrowserViews);
   mainWindow.on("closed", () => {
@@ -301,6 +309,17 @@ async function navigateTab(id, input) {
   let url;
   try { url = normalizeBrowserUrl(input); }
   catch (error) { return { ok: false, message: error.message }; }
+  if (tab.providerId && new URL(url).origin !== new URL(PROVIDERS[tab.providerId].url).origin) {
+    const previousId = tab.id;
+    providerTabIds.delete(tab.providerId);
+    submittedPrompts.delete(tab.providerId);
+    baselineReplies.delete(tab.providerId);
+    tabs.delete(previousId);
+    tab.providerId = null;
+    tab.id = "tab-" + nextTabNumber++;
+    tabs.set(tab.id, tab);
+    activeTabId = tab.id;
+  }
   try {
     await tab.view.webContents.loadURL(url);
     tab.url = tab.view.webContents.getURL() || url;
@@ -577,13 +596,13 @@ handle("browser:navigate", async (data) => navigateTab(data?.id, data?.url));
 handle("browser:back", async (id) => {
   const tab = tabs.get(id);
   if (!tab || tab.view.webContents.isDestroyed()) return { ok: false, message: "Open a browser tab first." };
-  if (tab.view.webContents.canGoBack()) tab.view.webContents.goBack();
+  if (tab.view.webContents.navigationHistory.canGoBack()) tab.view.webContents.navigationHistory.goBack();
   return { ok: true };
 });
 handle("browser:forward", async (id) => {
   const tab = tabs.get(id);
   if (!tab || tab.view.webContents.isDestroyed()) return { ok: false, message: "Open a browser tab first." };
-  if (tab.view.webContents.canGoForward()) tab.view.webContents.goForward();
+  if (tab.view.webContents.navigationHistory.canGoForward()) tab.view.webContents.navigationHistory.goForward();
   return { ok: true };
 });
 handle("browser:reload", async (id) => {

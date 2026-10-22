@@ -109,12 +109,18 @@ function activateRelativeTab(direction) {
 function attachBrowserContextMenu(webContents) {
   webContents.on("context-menu", (_event, params) => {
     const items = [];
-    if (params.selectionText) items.push({ label: "Copy", role: "copy" });
+    if (params.selectionText) items.push({ label: "Copy", click: () => webContents.copy() });
     if (params.isEditable) {
-      items.push({ label: "Cut", role: "cut" }, { label: "Paste", role: "paste" });
+      items.push(
+        { label: "Cut", click: () => webContents.cut() },
+        { label: "Paste", click: () => webContents.paste() }
+      );
     }
     if (items.length) items.push({ type: "separator" });
-    items.push({ label: "Select all", role: "selectAll" }, { label: "Reload", click: () => webContents.reload() });
+    items.push(
+      { label: "Select all", click: () => webContents.selectAll() },
+      { label: "Reload", click: () => webContents.reload() }
+    );
     Menu.buildFromTemplate(items).popup({ window: mainWindow || undefined });
   });
 }
@@ -168,17 +174,19 @@ function attachBrowserShortcuts(webContents, tabIdGetter) {
 
 function createBrowserTab(startURL, options = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) throw new Error("The main browser window is not ready.");
-  const normalized = normalizeNavigationInput(startURL);
+  const allowAboutBlank = options.allowAboutBlank === true && startURL === "about:blank";
+  const normalized = allowAboutBlank ? { ok: true, url: "about:blank" } : normalizeNavigationInput(startURL);
   if (!normalized.ok) throw new Error(normalized.message);
 
   const id = "tab-" + nextTabNumber++;
   const providerId = options.providerId || null;
   const provider = providerId ? PROVIDERS[providerId] : null;
   if (providerId && !provider) throw new Error("Unsupported AI provider.");
+  const partition = options.partition || (provider ? provider.partition : "persist:sudhit-browser-" + id);
 
   const view = new WebContentsView({
     webPreferences: {
-      partition: provider ? provider.partition : "persist:sudhit-browser-" + id,
+      partition,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -203,11 +211,20 @@ function createBrowserTab(startURL, options = {}) {
 
   const wc = view.webContents;
   wc.setWindowOpenHandler(({ url }) => {
-    if (isSafeBrowserURL(url)) {
-      try { createBrowserTab(url, { title: "New Tab", activate: true }); }
-      catch (error) { notify("Could not open new tab: " + error.message); }
+    if (url !== "about:blank" && !isSafeBrowserURL(url)) return { action: "deny" };
+    try {
+      const popup = createBrowserTab(url, {
+        title: "New Tab",
+        activate: true,
+        deferLoad: true,
+        allowAboutBlank: url === "about:blank",
+        partition
+      });
+      return { action: "allow", createWindow: () => popup.view.webContents };
+    } catch (error) {
+      notify("Could not open new tab: " + error.message);
+      return { action: "deny" };
     }
-    return { action: "deny" };
   });
   wc.on("will-navigate", (event, url) => {
     if (!isSafeBrowserURL(url) && url !== "about:blank") event.preventDefault();
@@ -248,6 +265,9 @@ function createBrowserTab(startURL, options = {}) {
     publishBrowserState();
   });
   wc.on("destroyed", () => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    } catch {}
     if (providerId && providerTabs.get(providerId) === id) providerTabs.delete(providerId);
     tabs.delete(id);
     if (activeTabId === id) activeTabId = "dashboard";
@@ -257,12 +277,14 @@ function createBrowserTab(startURL, options = {}) {
   attachBrowserShortcuts(wc, () => id);
 
   if (options.activate !== false) activateTab(id);
-  wc.loadURL(normalized.url).catch(error => {
-    tab.loading = false;
-    tab.title = "Page could not load";
-    notify("Could not load page: " + error.message);
-    publishBrowserState();
-  });
+  if (!options.deferLoad) {
+    wc.loadURL(normalized.url).catch(error => {
+      tab.loading = false;
+      tab.title = "Page could not load";
+      notify("Could not load page: " + error.message);
+      publishBrowserState();
+    });
+  }
   publishBrowserState();
   return tab;
 }
@@ -445,12 +467,14 @@ ipcMain.handle("browser:reload", async () => {
 ipcMain.handle("browser:copy", async () => {
   const tab = getActiveWebTab();
   if (!tab) return { ok: false, message: "Open a website tab first." };
+  tab.view.webContents.focus();
   tab.view.webContents.copy();
   return { ok: true };
 });
 ipcMain.handle("browser:paste", async () => {
   const tab = getActiveWebTab();
   if (!tab) return { ok: false, message: "Open a website tab first." };
+  tab.view.webContents.focus();
   tab.view.webContents.paste();
   return { ok: true };
 });

@@ -518,7 +518,11 @@ function setRunControls(active, paused = false) {
   document.getElementById("resumeRun").disabled = !active || !paused;
   document.getElementById("stopRun").disabled = !active;
   document.getElementById("openAll").disabled = active;
-  for (const button of document.querySelectorAll(".sendProvider")) button.disabled = active;
+  document.getElementById("newRound").disabled = active || document.getElementById("newRound").disabled;
+  document.getElementById("clear").disabled = active;
+  taskEl.disabled = active;
+  for (const button of document.querySelectorAll(".sendProvider, .collectProvider, #agents .collect")) button.disabled = active;
+  for (const field of document.querySelectorAll("#agents textarea, #agents input")) field.disabled = active;
   renderApprovals();
 }
 
@@ -547,6 +551,11 @@ document.getElementById("runCouncil").addEventListener("click", async () => {
     mainStatus.textContent = "Council run failed: " + error.message;
   } finally {
     setRunControls(false);
+    // Restore per-round availability from the fresh state after the run ends.
+    render();
+    for (const button of document.querySelectorAll(".collectProvider, #agents .collect")) button.disabled = false;
+    for (const field of document.querySelectorAll("#agents textarea, #agents input")) field.disabled = false;
+    taskEl.disabled = false;
   }
 });
 

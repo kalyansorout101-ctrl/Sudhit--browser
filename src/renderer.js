@@ -11,6 +11,7 @@ const GATE_LABELS = { director: "Director", leadCoder: "Lead coder", user: "User
 const { MAX_TASK_CHARS, MAX_COUNCIL_PROMPT_CHARS, MAX_REPLY_CHARS, sanitizeEntries, canStartNextRound, canApproveFinal } = requireCouncilRulesFallback();
 let entries = [];
 let approvals = {};
+let taskRevision = 0;
 let browserState = { activeTabId: "council", tabs: [], councilActive: true };
 let runActive = false;
 let lastTaskValue = "";
@@ -51,12 +52,18 @@ try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
   taskEl.value = typeof saved.task === "string" ? saved.task.slice(0, MAX_TASK_CHARS) : "";
   roundEl.value = String(Math.max(1, Math.min(99, Number.parseInt(saved.round, 10) || 1)));
-  entries = sanitizeEntries(saved.entries);
+  taskRevision = Math.max(0, Number.parseInt(saved.taskRevision, 10) || 0);
+  entries = sanitizeEntries(saved.entries).map((item) => ({
+    ...item,
+    taskRevision: Number.isInteger(item.taskRevision) ? item.taskRevision : taskRevision
+  }));
   if (saved.approvals && typeof saved.approvals === "object" && !Array.isArray(saved.approvals)) {
-    for (const [round, item] of Object.entries(saved.approvals)) {
-      const n = Number.parseInt(round, 10);
-      if (n < 1 || n > 99 || !item || typeof item !== "object") continue;
-      approvals[String(n)] = {
+    for (const [savedKey, item] of Object.entries(saved.approvals)) {
+      if (!item || typeof item !== "object") continue;
+      const key = /^\d+:\d+$/.test(savedKey) ? savedKey : taskRevision + ":" + savedKey;
+      const parts = key.split(":").map((value) => Number.parseInt(value, 10));
+      if (parts[0] < 0 || parts[1] < 1 || parts[1] > 99) continue;
+      approvals[key] = {
         director: ["pending", "approved", "changes-requested"].includes(item.director) ? item.director : "pending",
         leadCoder: ["pending", "approved", "changes-requested"].includes(item.leadCoder) ? item.leadCoder : "pending",
         user: ["pending", "approved"].includes(item.user) ? item.user : "pending"
@@ -74,10 +81,18 @@ function getRound() {
   return Number.isFinite(n) ? Math.max(1, Math.min(99, n)) : 1;
 }
 
+function approvalKey(round = getRound()) {
+  return taskRevision + ":" + round;
+}
+
 function getApproval(round = getRound()) {
-  const key = String(round);
+  const key = approvalKey(round);
   if (!approvals[key]) approvals[key] = emptyApproval();
   return approvals[key];
+}
+
+function currentTaskEntries() {
+  return entries.filter((item) => item.taskRevision === taskRevision);
 }
 
 function save() {
@@ -85,6 +100,7 @@ function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       task: taskEl.value.slice(0, MAX_TASK_CHARS),
       round: getRound(),
+      taskRevision,
       entries: entries.slice(-300),
       approvals
     }));
@@ -101,18 +117,20 @@ function transcriptText() {
   ];
   if (!entries.length) lines.push("No replies collected yet.");
   for (const item of entries) {
-    lines.push("=== ROUND " + item.round + " · " + item.agent + (item.partial ? " · PARTIAL / REVIEW REQUIRED" : "") + " ===");
+    lines.push("=== ROUND " + item.round + " · " + item.agent +
+      (item.partial ? " · PARTIAL / REVIEW REQUIRED" : "") +
+      (item.taskRevision !== taskRevision ? " · DIFFERENT TASK REVISION " + item.taskRevision + " (excluded from current context)" : "") + " ===");
     lines.push(item.reply, "");
   }
-  const rounds = new Set([
-    ...entries.map((item) => item.round),
-    ...Object.keys(approvals).map((key) => Number.parseInt(key, 10)).filter((n) => Number.isFinite(n))
-  ]);
-  if (rounds.size) {
+  const approvalRecords = Object.entries(approvals).map(([key, gate]) => {
+    const parts = key.split(":").map((value) => Number.parseInt(value, 10));
+    return { taskRevision: parts[0], round: parts[1], gate };
+  }).filter((item) => Number.isFinite(item.taskRevision) && Number.isFinite(item.round));
+  if (approvalRecords.length) {
     lines.push("=== APPROVAL RECORDS ===");
-    for (const round of [...rounds].sort((a, b) => a - b)) {
-      const gate = approvals[String(round)] || emptyApproval();
-      lines.push("Round " + round + ": Director=" + gate.director + "; Lead coder=" + gate.leadCoder + "; User final=" + gate.user);
+    for (const item of approvalRecords.sort((a, b) => a.taskRevision - b.taskRevision || a.round - b.round)) {
+      lines.push("Task revision " + item.taskRevision + " / round " + item.round +
+        ": Director=" + item.gate.director + "; Lead coder=" + item.gate.leadCoder + "; User final=" + item.gate.user);
     }
   }
   return lines.join("\n");
@@ -124,7 +142,7 @@ function agentName(card) {
 }
 
 function hasCompleteReply(agent, round = getRound()) {
-  return entries.some((item) => item.round === round && !item.partial && item.agent.toLowerCase() === agent.toLowerCase() && item.reply);
+  return entries.some((item) => item.taskRevision === taskRevision && item.round === round && !item.partial && item.agent.toLowerCase() === agent.toLowerCase() && item.reply);
 }
 
 function approvalDisplay(value) {
@@ -154,17 +172,17 @@ function renderApprovals() {
   document.getElementById("rejectDirector").disabled = !directorReady || runActive;
   document.getElementById("approveLeadCoder").disabled = !coderReady || runActive;
   document.getElementById("rejectLeadCoder").disabled = !coderReady || runActive;
-  const allowed = canApproveFinal({ round: getRound(), approvals: gate, entries });
+  const allowed = canApproveFinal({ round: getRound(), approvals: gate, entries: currentTaskEntries() });
   document.getElementById("approveFinal").disabled = !allowed || runActive;
   document.getElementById("approveFinal").textContent = gate.user === "approved" ? "Final result approved ✓" : "Approve final result";
-  document.getElementById("newRound").disabled = !canStartNextRound({ round: getRound(), approvals: gate, entries }) || runActive;
+  document.getElementById("newRound").disabled = !canStartNextRound({ round: getRound(), approvals: gate, entries: currentTaskEntries() }) || runActive;
 }
 
 function render() {
   transcriptEl.textContent = transcriptText();
   for (const card of document.querySelectorAll("[data-agent]")) {
     const agent = agentName(card);
-    const latest = [...entries].reverse().find((item) => item.round === getRound() && item.agent === agent);
+    const latest = [...entries].reverse().find((item) => item.taskRevision === taskRevision && item.round === getRound() && item.agent === agent);
     card.querySelector(".status").textContent = latest
       ? "Collected in round " + latest.round + (latest.partial ? " (partial; review required)." : ".")
       : "No reply collected for this round yet.";
@@ -196,7 +214,7 @@ function addEntry(agent, reply, options = {}) {
     entries.shift();
     mainStatus.textContent = "The transcript reached its local entry limit; the oldest reply was removed to keep the session bounded.";
   }
-  entries.push({ agent, round, reply: text, collectedAt: new Date().toISOString(), partial: Boolean(options.partial) });
+  entries.push({ agent, round, reply: text, taskRevision, collectedAt: new Date().toISOString(), partial: Boolean(options.partial) });
   invalidateCurrentApprovals();
   render();
   return true;
@@ -237,7 +255,7 @@ function requireTask() {
 function buildCouncilPrompt() {
   const task = requireTask();
   if (!task) return "";
-  const priorEntries = entries.filter((item) => item.round < getRound());
+  const priorEntries = entries.filter((item) => item.taskRevision === taskRevision && item.round < getRound());
   const sharedAll = priorEntries.length
     ? priorEntries.map((item) => "ROUND " + item.round + " · " + item.agent + (item.partial ? " (partial; verify)" : "") + "\n" + item.reply).join("\n\n")
     : "No previous-round replies collected yet.";
@@ -332,10 +350,15 @@ async function refreshProviders() {
 
 taskEl.addEventListener("input", () => {
   if (taskEl.value !== lastTaskValue) {
-    const anyApproved = Object.values(approvals).some((gate) => gate.director === "approved" || gate.leadCoder === "approved" || gate.user === "approved");
-    if (anyApproved) {
-      approvals = {};
-      mainStatus.textContent = "Task changed. Previous round approvals were reset; review the new task before progressing.";
+    const prefix = taskRevision + ":";
+    const hasEntries = entries.some((item) => item.taskRevision === taskRevision);
+    const hasDecisions = Object.entries(approvals).some(([key, gate]) =>
+      key.startsWith(prefix) && [gate.director, gate.leadCoder, gate.user].some((value) => value !== "pending")
+    );
+    if (hasEntries || hasDecisions) {
+      taskRevision += 1;
+      roundEl.value = "1";
+      mainStatus.textContent = "Task changed. Earlier replies remain in the transcript but are excluded from this task's shared context and approval gates.";
     }
     lastTaskValue = taskEl.value;
   }
@@ -350,7 +373,7 @@ document.getElementById("copyTranscript").addEventListener("click", () => copyTe
 
 document.getElementById("newRound").addEventListener("click", () => {
   const gate = getApproval();
-  if (!canStartNextRound({ round: getRound(), approvals: gate, entries })) {
+  if (!canStartNextRound({ round: getRound(), approvals: gate, entries: currentTaskEntries() })) {
     mainStatus.textContent = "Next round locked: collect complete ChatGPT and Grok replies, then record both approvals.";
     return;
   }
@@ -372,6 +395,7 @@ document.getElementById("clear").addEventListener("click", () => {
   if (!confirm("Clear the task, replies, and approval history saved locally? This cannot be undone.")) return;
   entries = [];
   approvals = {};
+  taskRevision = 0;
   taskEl.value = "";
   lastTaskValue = "";
   roundEl.value = "1";
@@ -567,7 +591,7 @@ document.getElementById("rejectDirector").addEventListener("click", () => record
 document.getElementById("approveLeadCoder").addEventListener("click", () => recordGate("leadCoder", "approved"));
 document.getElementById("rejectLeadCoder").addEventListener("click", () => recordGate("leadCoder", "changes-requested"));
 document.getElementById("approveFinal").addEventListener("click", () => {
-  if (!canApproveFinal({ round: getRound(), approvals: getApproval(), entries })) {
+  if (!canApproveFinal({ round: getRound(), approvals: getApproval(), entries: currentTaskEntries() })) {
     mainStatus.textContent = "Final approval is locked until complete ChatGPT and Grok replies are present and both review gates are approved.";
     return;
   }

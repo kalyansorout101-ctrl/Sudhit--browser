@@ -79,7 +79,7 @@ function canStartNextRound({ round, approvals, entries }) {
   const relevant = Array.isArray(entries) ? entries.filter((item) => item.round === round && !item.partial) : [];
   const hasDirector = relevant.some((item) => String(item.agent).toLowerCase() === "chatgpt");
   const hasLeadCoder = relevant.some((item) => String(item.agent).toLowerCase() === "grok");
-  return Boolean(hasDirector && hasLeadCoder && gate.director === "approved" && gate.leadCoder === "approved" && round < 99);
+  return Boolean(hasDirector && hasLeadCoder && gate.director === "approved" && gate.leadCoder === "approved" && gate.user !== "approved" && round < 99);
 }
 
 function canApproveFinal({ approvals, entries, round }) {

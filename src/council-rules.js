@@ -18,11 +18,13 @@ function normalizeBrowserUrl(input) {
   if (!raw) throw new Error("Enter a website address or search query.");
 
   let candidate = raw;
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
-    const looksLikeHost = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#].*)?$/i.test(raw);
-    candidate = looksLikeHost
-      ? "https://" + raw
-      : "https://www.google.com/search?q=" + encodeURIComponent(raw);
+  const looksLikeHost = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|\[[\da-f:]+\]|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#].*)?$/i.test(raw);
+  if (/^https?:\/\//i.test(raw)) {
+    candidate = raw;
+  } else if (looksLikeHost) {
+    candidate = "https://" + raw;
+  } else if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+    candidate = "https://www.google.com/search?q=" + encodeURIComponent(raw);
   }
 
   let url;

@@ -26,6 +26,7 @@ function requireCouncilRulesFallback() {
       round: Math.max(1, Math.min(99, Number.parseInt(item.round, 10) || 1)),
       reply: String(item.reply || "").trim().slice(0, 100000),
       collectedAt: String(item.collectedAt || ""),
+      taskRevision: Math.max(0, Number.parseInt(item.taskRevision, 10) || 0),
       partial: Boolean(item.partial)
     })).slice(-300) : [],
     canStartNextRound: ({ round, approvals: gate, entries: rows }) => {
@@ -49,7 +50,7 @@ function emptyApproval() {
 }
 
 try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem("sudhit-council-session-v1") || "{}");
   taskEl.value = typeof saved.task === "string" ? saved.task.slice(0, MAX_TASK_CHARS) : "";
   roundEl.value = String(Math.max(1, Math.min(99, Number.parseInt(saved.round, 10) || 1)));
   taskRevision = Math.max(0, Number.parseInt(saved.taskRevision, 10) || 0);

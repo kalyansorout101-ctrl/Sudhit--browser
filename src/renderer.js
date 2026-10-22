@@ -33,7 +33,7 @@ function requireCouncilRulesFallback() {
       const complete = (Array.isArray(rows) ? rows : []).filter((item) => item.round === round && !item.partial);
       return complete.some((item) => String(item.agent).toLowerCase() === "chatgpt") &&
         complete.some((item) => String(item.agent).toLowerCase() === "grok") &&
-        gate?.director === "approved" && gate?.leadCoder === "approved" && round < 99;
+        gate?.director === "approved" && gate?.leadCoder === "approved" && gate?.user !== "approved" && round < 99;
     },
     canApproveFinal: ({ round, approvals: gate, entries: rows }) => {
       const complete = (Array.isArray(rows) ? rows : []).filter((item) => item.round === round && !item.partial);
@@ -524,6 +524,13 @@ function setRunControls(active, paused = false) {
   taskEl.disabled = active;
   for (const button of document.querySelectorAll(".sendProvider, .collectProvider, #agents .collect")) button.disabled = active;
   for (const field of document.querySelectorAll("#agents textarea, #agents input")) field.disabled = active;
+  browserAddressEl.disabled = active;
+  document.getElementById("browserGo").disabled = active;
+  document.getElementById("newBrowserTab").disabled = active;
+  document.getElementById("browserBack").disabled = active || document.getElementById("browserBack").disabled;
+  document.getElementById("browserForward").disabled = active || document.getElementById("browserForward").disabled;
+  document.getElementById("browserReload").disabled = active || document.getElementById("browserReload").disabled;
+  for (const closeButton of document.querySelectorAll("[data-close-tab]")) closeButton.disabled = active;
   renderApprovals();
 }
 
@@ -557,6 +564,11 @@ document.getElementById("runCouncil").addEventListener("click", async () => {
     for (const button of document.querySelectorAll(".collectProvider, #agents .collect")) button.disabled = false;
     for (const field of document.querySelectorAll("#agents textarea, #agents input")) field.disabled = false;
     taskEl.disabled = false;
+    browserAddressEl.disabled = false;
+    document.getElementById("browserGo").disabled = false;
+    document.getElementById("newBrowserTab").disabled = false;
+    for (const closeButton of document.querySelectorAll("[data-close-tab]")) closeButton.disabled = false;
+    await refreshProviders();
   }
 });
 

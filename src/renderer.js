@@ -8,7 +8,7 @@ const browserStatusEl = document.getElementById("browserStatus");
 const STORAGE_KEY = "sudhit-council-session-v2";
 const PROVIDER_LABELS = { chatgpt: "ChatGPT", claude: "Claude", grok: "Grok" };
 const GATE_LABELS = { director: "Director", leadCoder: "Lead coder", user: "User final approval" };
-const { MAX_TASK_CHARS, MAX_COUNCIL_PROMPT_CHARS, MAX_REPLY_CHARS, sanitizeEntries, canStartNextRound, canApproveFinal } = requireCouncilRulesFallback();
+const { MAX_TASK_CHARS, MAX_COUNCIL_PROMPT_CHARS, MAX_REPLY_CHARS, MAX_ENTRIES, sanitizeEntries, canStartNextRound, canApproveFinal } = requireCouncilRulesFallback();
 let entries = [];
 let approvals = {};
 let taskRevision = 0;
@@ -20,15 +20,16 @@ function requireCouncilRulesFallback() {
   return {
     MAX_TASK_CHARS: 30000,
     MAX_COUNCIL_PROMPT_CHARS: 60000,
-    MAX_REPLY_CHARS: 100000,
+    MAX_REPLY_CHARS: 25000,
+    MAX_ENTRIES: 50,
     sanitizeEntries: (items) => Array.isArray(items) ? items.filter((item) => item && typeof item === "object" && String(item.reply || "").trim()).map((item) => ({
       agent: String(item.agent || "Unknown AI").slice(0, 100),
       round: Math.max(1, Math.min(99, Number.parseInt(item.round, 10) || 1)),
-      reply: String(item.reply || "").trim().slice(0, 100000),
+      reply: String(item.reply || "").trim().slice(0, 25000),
       collectedAt: String(item.collectedAt || ""),
       taskRevision: Math.max(0, Number.parseInt(item.taskRevision, 10) || 0),
       partial: Boolean(item.partial)
-    })).slice(-300) : [],
+    })).slice(-50) : [],
     canStartNextRound: ({ round, approvals: gate, entries: rows }) => {
       const complete = (Array.isArray(rows) ? rows : []).filter((item) => item.round === round && !item.partial);
       return complete.some((item) => String(item.agent).toLowerCase() === "chatgpt") &&
@@ -102,7 +103,7 @@ function save() {
       task: taskEl.value.slice(0, MAX_TASK_CHARS),
       round: getRound(),
       taskRevision,
-      entries: entries.slice(-300),
+      entries: entries.slice(-MAX_ENTRIES),
       approvals
     }));
   } catch (error) {
@@ -211,7 +212,7 @@ function addEntry(agent, reply, options = {}) {
   text = text.slice(0, MAX_REPLY_CHARS);
   const duplicate = entries.some((item) => item.taskRevision === taskRevision && item.round === round && item.agent === agent && item.reply === text);
   if (duplicate) return false;
-  if (entries.length >= 300) {
+  if (entries.length >= MAX_ENTRIES) {
     entries.shift();
     mainStatus.textContent = "The transcript reached its local entry limit; the oldest reply was removed to keep the session bounded.";
   }
@@ -311,6 +312,7 @@ function renderBrowserState(state) {
     close.textContent = "×";
     close.setAttribute("aria-label", "Close " + button.textContent + " tab");
     close.dataset.closeTab = tab.id;
+    close.disabled = runActive;
     close.addEventListener("click", async (event) => {
       event.stopPropagation();
       const result = await window.sudhitAI.closeBrowserTab(tab.id);
@@ -323,9 +325,9 @@ function renderBrowserState(state) {
 
   const current = (state.tabs || []).find((tab) => tab.id === state.activeTabId);
   const hasWebTab = Boolean(current);
-  document.getElementById("browserBack").disabled = !hasWebTab || !current.canGoBack;
-  document.getElementById("browserForward").disabled = !hasWebTab || !current.canGoForward;
-  document.getElementById("browserReload").disabled = !hasWebTab;
+  document.getElementById("browserBack").disabled = runActive || !hasWebTab || !current.canGoBack;
+  document.getElementById("browserForward").disabled = runActive || !hasWebTab || !current.canGoForward;
+  document.getElementById("browserReload").disabled = runActive || !hasWebTab;
   if (document.activeElement !== browserAddressEl) browserAddressEl.value = current ? current.url : "";
   browserStatusEl.textContent = current
     ? (current.loading ? "Loading " + current.url : current.title + " · " + current.url)

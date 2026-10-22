@@ -7,6 +7,8 @@ const {
 
 test("browser URL normalization accepts web addresses and turns plain text into a search", () => {
   assert.equal(normalizeBrowserUrl("example.com").startsWith("https://example.com/"), true);
+  assert.equal(normalizeBrowserUrl("localhost:3000").startsWith("https://localhost:3000/"), true);
+  assert.equal(normalizeBrowserUrl("127.0.0.1:8080").startsWith("https://127.0.0.1:8080/"), true);
   assert.equal(normalizeBrowserUrl("find local weather").startsWith("https://www.google.com/search?q="), true);
   assert.equal(isHttpUrl("https://example.com"), true);
   assert.equal(isHttpUrl("javascript:alert(1)"), false);
@@ -42,6 +44,8 @@ test("next round and final approval require both council gates and replies", () 
   const approvals = { director: "approved", leadCoder: "approved" };
   assert.equal(canStartNextRound({ round: 1, approvals, entries }), true);
   assert.equal(canApproveFinal({ round: 1, approvals, entries }), true);
+  assert.equal(canApproveFinal({ round: 99, approvals, entries: entries.map((item) => ({ ...item, round: 99 })) }), true);
+  assert.equal(canStartNextRound({ round: 99, approvals, entries: entries.map((item) => ({ ...item, round: 99 })) }), false);
   assert.equal(canStartNextRound({ round: 1, approvals: { director: "approved" }, entries }), false);
   assert.equal(canStartNextRound({ round: 1, approvals, entries: entries.filter(x => x.agent !== "Grok") }), false);
 });

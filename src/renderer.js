@@ -274,6 +274,7 @@ function buildCouncilPrompt() {
 function renderBrowserState(state) {
   if (!state) return;
   browserState = state;
+  const newTabButton = document.getElementById("newBrowserTab");
   browserTabsEl.replaceChildren();
   const council = document.createElement("button");
   council.className = "browserTab tabCouncil";
@@ -318,7 +319,7 @@ function renderBrowserState(state) {
     item.appendChild(close);
     browserTabsEl.appendChild(item);
   }
-  browserTabsEl.appendChild(document.getElementById("newBrowserTab"));
+  if (newTabButton) browserTabsEl.appendChild(newTabButton);
 
   const current = (state.tabs || []).find((tab) => tab.id === state.activeTabId);
   const hasWebTab = Boolean(current);

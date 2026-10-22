@@ -380,7 +380,12 @@ async function sendPrompt(id, prompt) {
   if (!tab) return { ok: false, id, label: provider.label, message: "Open this AI website in a browser tab first, then sign in if required." };
   const wc = tab.view.webContents;
   if (wc.isDestroyed()) return { ok: false, id, label: provider.label, message: "The AI website tab is closed." };
-  if (wc.isLoading()) return { ok: false, id, label: provider.label, message: "The AI website is still loading. Try again in a moment." };
+  if (wc.isLoading()) {
+    notify("Waiting for " + provider.label + " to finish loading…", { providerId: id, status: "loading" });
+    const ready = await waitForPageReady(wc, 30000);
+    if (!ready) return { ok: false, id, label: provider.label, message: "The AI website did not finish loading within 30 seconds. Check the tab and try again." };
+  }
+  if (wc.isDestroyed()) return { ok: false, id, label: provider.label, message: "The AI website tab was closed while loading." };
 
   try {
     let baseline = "";
@@ -428,6 +433,14 @@ async function readReply(id) {
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForPageReady(webContents, timeoutMs) {
+  const started = Date.now();
+  while (!webContents.isDestroyed() && webContents.isLoading() && Date.now() - started < timeoutMs) {
+    await delay(200);
+  }
+  return !webContents.isDestroyed() && !webContents.isLoading();
 }
 
 ipcMain.handle("browser:get-state", async () => serializeBrowserState());

@@ -65,6 +65,7 @@ function sanitizeEntries(entries) {
       round: Math.max(1, Math.min(99, Number.parseInt(item.round, 10) || 1)),
       reply: String(item.reply || "").trim().slice(0, MAX_REPLY_CHARS),
       collectedAt: typeof item.collectedAt === "string" ? item.collectedAt.slice(0, 40) : "",
+      taskRevision: Math.max(0, Number.parseInt(item.taskRevision, 10) || 0),
       partial: Boolean(item.partial)
     }))
     .filter((item) => item.reply)
@@ -80,11 +81,13 @@ function canStartNextRound({ round, approvals, entries }) {
 }
 
 function canApproveFinal({ approvals, entries, round }) {
-  return canStartNextRound({
-    round: Math.min(98, round),
-    approvals,
-    entries
-  }) && Array.isArray(entries) && entries.some((item) => item.round === round && !item.partial && item.reply);
+  const gate = approvals || {};
+  const relevant = Array.isArray(entries) ? entries.filter((item) => item.round === round && !item.partial) : [];
+  const hasDirector = relevant.some((item) => String(item.agent).toLowerCase() === "chatgpt");
+  const hasLeadCoder = relevant.some((item) => String(item.agent).toLowerCase() === "grok");
+  return Boolean(hasDirector && hasLeadCoder &&
+    gate.director === "approved" && gate.leadCoder === "approved" &&
+    relevant.some((item) => String(item.reply || "").trim()));
 }
 
 module.exports = {

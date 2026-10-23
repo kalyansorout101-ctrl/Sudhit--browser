@@ -56,7 +56,7 @@ test("browser-first essentials are connected through the preload bridge", () => 
   assert.match(main, /browser:clear-history/);
   assert.match(main, /browser:open-download/);
   assert.match(main, /browser:reveal-download/);
-  assert.match(main, /browser-home-active/);
+  assert.match(html, /browser-home-active/);
   assert.match(renderer, /renderBrowserHome/);
   assert.match(renderer, /onHomeState/);
   assert.match(main, /installApplicationMenu\(\)/);

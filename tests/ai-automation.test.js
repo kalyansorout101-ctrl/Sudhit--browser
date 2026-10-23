@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PROVIDERS, makeSendScript, makeReadScript } = require("../src/ai-automation");
 
-test("supported AI sites use HTTPS and separate persistent profiles", () => {
+test("supported AI websites use HTTPS and separate persistent profiles", () => {
   assert.deepEqual(Object.keys(PROVIDERS).sort(), ["chatgpt", "claude", "grok"]);
   const partitions = new Set();
   for (const provider of Object.values(PROVIDERS)) {
@@ -13,8 +13,8 @@ test("supported AI sites use HTTPS and separate persistent profiles", () => {
   }
 });
 
-test("generated prompt submission scripts parse for each supported provider", () => {
-  const unusualPrompt = "Find the bug in `x` and this string: '); globalThis.pwned = true; //";
+test("generated prompt scripts parse and treat prompt text as a literal", () => {
+  const unusualPrompt = "Find the bug in x and this string: '); globalThis.pwned = true; //";
   for (const id of Object.keys(PROVIDERS)) {
     const script = makeSendScript(id, unusualPrompt);
     assert.doesNotThrow(() => new Function("return " + script), id + " send script should parse");
@@ -22,10 +22,11 @@ test("generated prompt submission scripts parse for each supported provider", ()
   }
 });
 
-test("generated response collection scripts parse and include provider-specific selectors", () => {
+test("generated reply scripts parse and expose message-count metadata", () => {
   for (const [id, provider] of Object.entries(PROVIDERS)) {
     const script = makeReadScript(id, "test prompt");
     assert.doesNotThrow(() => new Function("return " + script), id + " read script should parse");
     assert.ok(script.includes(provider.id));
+    assert.ok(script.includes("messageCount"));
   }
 });

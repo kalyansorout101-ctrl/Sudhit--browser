@@ -2,6 +2,11 @@ name: Build Windows Installer
 
 on:
   push:
+    branches:
+      - main
+      - "fix/**"
+      - "browser-first/**"
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -15,24 +20,21 @@ concurrency:
 jobs:
   test-and-build:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-      - name: Set up Node.js
+      - name: Set up Node.js LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Check JavaScript syntax
-        run: |
-          node --check src/main.js
-          node --check src/preload.js
-          node --check src/renderer.js
-          node --check src/ai-automation.js
+          node-version: 24
       - name: Install dependencies
-        run: npm install
-      - name: Test AI automation helpers
+        run: npm install --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Run automated tests
         run: npm test
-      - name: Build Windows installer
+      - name: Build Windows NSIS installer
         run: npm run dist:win
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

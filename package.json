@@ -1,13 +1,13 @@
 {
   "name": "sudhit-browser",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "SUDHIT Browser with shared multi-AI council workflow",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis",
+    "dist:win": "electron-builder --win nsis --publish never",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/ai-automation.js && node --check src/council-rules.js && node --check tests/ai-automation.test.js && node --check tests/council-rules.test.js && node --check tests/main-static.test.js"
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/ai-automation.js && node --check src/council-rules.js && node --check src/browser-store.js && node --check tests/ai-automation.test.js && node --check tests/council-rules.test.js && node --check tests/main-static.test.js && node --check tests/browser-store.test.js"
   },
   "devDependencies": {
     "electron": "^45.0.0",

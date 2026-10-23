@@ -26,6 +26,18 @@ contextBridge.exposeInMainWorld("sudhitAI", Object.freeze({
   forward: (tabId) => ipcRenderer.invoke("browser:forward", tabId),
   reload: (tabId) => ipcRenderer.invoke("browser:reload", tabId),
   closeBrowserTab: (tabId) => ipcRenderer.invoke("browser:close-tab", tabId),
+  getBrowserHomeState: () => ipcRenderer.invoke("browser:get-home-state"),
+  bookmarkCurrentTab: (tabId) => ipcRenderer.invoke("browser:bookmark-current", tabId),
+  removeBookmark: (idOrUrl) => ipcRenderer.invoke("browser:remove-bookmark", idOrUrl),
+  openBookmark: (url) => ipcRenderer.invoke("browser:open-bookmark", url),
+  clearBrowserHistory: () => ipcRenderer.invoke("browser:clear-history"),
+  showBrowserHome: () => ipcRenderer.invoke("browser:show-home"),
+  openDownload: (id) => ipcRenderer.invoke("browser:open-download", id),
+  revealDownload: (id) => ipcRenderer.invoke("browser:reveal-download", id),
+  openDownloadsFolder: () => ipcRenderer.invoke("browser:open-downloads-folder"),
+  onHomeState: (callback) => subscribe("browser:home-state", callback),
+  onCommand: (callback) => subscribe("browser:command", callback),
+  onDownloadProgress: (callback) => subscribe("browser:download-progress", callback),
   onProgress: (callback) => subscribe("ai:progress", callback),
   onBrowserChanged: (callback) => subscribe("browser:changed", callback)
 }));

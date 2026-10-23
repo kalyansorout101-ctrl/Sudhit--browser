@@ -25,8 +25,11 @@ test("external browser content uses isolated, sandboxed WebContentsViews", () =>
   assert.match(main, /nodeIntegration:\s*false/);
   assert.match(main, /sandbox:\s*true/);
   assert.match(main, /webSecurity:\s*true/);
-  assert.match(main, /setPermissionRequestHandler\([^\n]*callback\(false\)/);
-  assert.match(main, /setPermissionCheckHandler\(\(\) => false\)/);
+  assert.match(main, /setPermissionRequestHandler\(\(contents, permission, callback, details\)/);
+  assert.match(main, /askForSitePermission\(ses, contents, permission, details \|\| \{\}\)/);
+  assert.match(main, /setPermissionCheckHandler\(\(contents, permission, requestingOrigin\)/);
+  assert.match(main, /buttons: \["Block", "Allow once"\]/);
+  assert.match(main, /registerDownloadHandling\(ses\)/);
 });
 
 test("renderer IPC is allowlisted and rejects foreign renderer senders", () => {
@@ -44,6 +47,20 @@ test("browser state render preserves the New Tab button before replacing tabs", 
   const replaceChildren = renderer.indexOf("browserTabsEl.replaceChildren()", preserveButton);
   const appendButton = renderer.indexOf("browserTabsEl.appendChild(newTabButton)", replaceChildren);
   assert.ok(preserveButton >= 0 && replaceChildren > preserveButton && appendButton > replaceChildren);
+});
+
+test("browser-first essentials are connected through the preload bridge", () => {
+  assert.match(main, /browser:get-home-state/);
+  assert.match(main, /browser:bookmark-current/);
+  assert.match(main, /browser:open-bookmark/);
+  assert.match(main, /browser:clear-history/);
+  assert.match(main, /browser:open-download/);
+  assert.match(main, /browser:reveal-download/);
+  assert.match(main, /browser-home-active/);
+  assert.match(renderer, /renderBrowserHome/);
+  assert.match(renderer, /onHomeState/);
+  assert.match(main, /installApplicationMenu\(\)/);
+  assert.match(main, /context-menu/);
 });
 
 test("integrated browser and council approval requirements are present", () => {

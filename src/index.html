@@ -27,6 +27,35 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .browserNav button{min-width:38px;padding:4px 9px;min-height:36px}
 #browserAddress{flex:1;min-width:80px;height:36px;margin:0;padding:7px 11px;border-radius:9px;border:1px solid #424961;background:#0b0e17;color:#fff}
 .browserStatus{font-size:11px;line-height:18px;color:#aab2ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+#browserHome{display:none}
+body.browser-home-active > header,body.browser-home-active > footer,body.browser-home-active main>section:not(#browserHome){display:none!important}
+body.browser-home-active main{max-width:1180px;margin:0 auto;padding:24px 22px}
+body.browser-home-active #browserHome{display:block}
+.homeHero{padding:clamp(22px,4vw,44px);border:1px solid #3d4360;border-radius:22px;background:radial-gradient(ellipse at top left,#37305c 0%,#1c2031 50%,#171b29 100%);box-shadow:0 12px 34px #0003}
+.homeEyebrow{color:#c4b5fd;font-size:12px;font-weight:800;letter-spacing:.16em;margin:0 0 12px}
+.homeHero h2{font-size:clamp(26px,4vw,40px);letter-spacing:-.03em;margin:0 0 10px}
+.homeHero .muted{max-width:640px;margin:0}
+.homeSearch{display:flex;gap:9px;margin-top:22px}
+.homeSearch input{margin:0;min-width:0;flex:1;height:48px;padding:12px 15px;border-radius:12px;background:#090c15;border-color:#525b7c}
+.homeSearch button{min-width:120px}
+.homeShortcuts{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0 22px}
+.homeShortcuts button{background:#252b40;border:1px solid #414a66;color:#e8ebfa;border-radius:11px;padding:10px 15px}
+.homeShortcuts button:hover{background:#37305c;border-color:#8b5cf6}
+.homeGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:15px}
+.homeCard{border:1px solid #343950;border-radius:16px;padding:17px;background:#171b28;min-width:0;min-height:176px}
+.homeCardHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.homeCardHeading h3{margin:0}
+.homeCardHeading button{font-size:12px;padding:7px 9px;min-height:32px}
+.homeList{display:flex;flex-direction:column;gap:7px}
+.homeListItem{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 8px;border:1px solid #2d3448;border-radius:10px;background:#121622}
+.homeListItem .homeOpen{flex:1;text-align:left;min-width:0;background:transparent;color:#e9ecfc;font-weight:600;padding:5px 6px;overflow:hidden}
+.homeListItem .homeRemove{background:#31374b;color:#c9d1ea;min-height:30px;padding:4px 8px;font-size:12px}
+.homeMeta{display:block;color:#8f9ab7;font-size:11px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+.homeEmpty{font-size:13px;color:#8f9ab7;padding:12px 4px}
+.homeProgress{width:72px;height:5px;background:#30374c;border-radius:9px;overflow:hidden;flex-shrink:0}
+.homeProgress span{height:100%;display:block;background:#8b5cf6}
+.homeFootnote{color:#818ca8;font-size:12px;margin:17px 3px 0}
+@media(max-width:520px){body.browser-home-active main{padding:14px 10px}.homeSearch{flex-direction:column}.homeSearch button{width:100%}.homeHero{padding:22px 17px}.homeCard{padding:13px}}
 header{padding:20px 24px;border-bottom:1px solid #30364a;display:flex;align-items:center;gap:14px}
 .logo{width:42px;height:42px;border-radius:13px;background:#8b5cf6;display:grid;place-items:center;font-weight:800;font-size:22px;flex-shrink:0}
 h1{font-size:21px;margin:0}header p{margin:3px 0 0;color:#aab2ca;font-size:13px}
@@ -50,24 +79,59 @@ footer{color:#7f89a5;text-align:center;font-size:12px;padding:18px}
 @media(max-width:520px){.browserChrome{padding-left:7px;padding-right:7px}.browserNav button{min-width:32px;padding:4px 7px}.browserStatus{font-size:10px}header{padding:16px}.panel{padding:16px}main{padding:0 10px}.toolbar button,.row button{flex:1}}
 </style>
 </head>
-<body>
+<body class="browser-home-active">
 <div class="browserChrome" role="region" aria-label="Browser controls">
   <div class="browserTabs" id="browserTabs" role="tablist" aria-label="Open browser tabs">
-    <button class="browserTab tabCouncil" id="councilTab" role="tab" aria-selected="true" data-tab-id="council">SUDHIT Council</button>
+    <button class="browserTab tabCouncil" id="councilTab" role="tab" aria-selected="true" data-tab-id="council">Home</button>
     <button class="tabNew" id="newBrowserTab" type="button" aria-label="Open new browser tab">＋ New Tab</button>
   </div>
   <form class="browserNav" id="browserNavForm">
+    <button class="secondary" id="browserHomeButton" type="button" aria-label="Go to home" title="Home">⌂</button>
     <button class="secondary" id="browserBack" type="button" aria-label="Go back" title="Back" disabled>←</button>
     <button class="secondary" id="browserForward" type="button" aria-label="Go forward" title="Forward" disabled>→</button>
     <button class="secondary" id="browserReload" type="button" aria-label="Reload tab" title="Reload" disabled>↻</button>
     <input id="browserAddress" type="text" inputmode="url" autocomplete="off" spellcheck="false" aria-label="Website address or search" placeholder="Enter a website address or search query">
     <button id="browserGo" type="submit">Go</button>
+    <button class="secondary" id="browserBookmarkButton" type="button" aria-label="Bookmark current page" title="Bookmark current page" disabled>☆</button>
   </form>
   <div class="browserStatus" id="browserStatus" role="status" aria-live="polite">Integrated browser ready · websites remain in isolated sign-in profiles</div>
 </div>
 
 <header><div class="logo" aria-hidden="true">S</div><div><h1>SUDHIT Browser</h1><p>Integrated browser · shared AI council · v0.4 development build</p></div></header>
 <main>
+<section class="homePage" id="browserHome" aria-label="Browser home">
+  <div class="homeHero">
+    <p class="homeEyebrow">SUDHIT BROWSER · START PAGE</p>
+    <h2>What would you like to explore?</h2>
+    <p class="muted">Search the web, jump to a favourite site, or return to a page you visited recently. Your bookmarks and history stay on this device.</p>
+    <form class="homeSearch" id="homeSearchForm">
+      <input id="homeSearchInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" aria-label="Search the web or enter an address" placeholder="Search the web or enter a website address">
+      <button type="submit">Search / Go ↗</button>
+    </form>
+  </div>
+  <div class="homeShortcuts" aria-label="Popular destinations">
+    <button type="button" data-home-url="https://www.google.com/">Google</button>
+    <button type="button" data-home-url="https://www.youtube.com/">YouTube</button>
+    <button type="button" data-home-url="https://mail.google.com/">Gmail</button>
+    <button type="button" data-home-url="https://github.com/">GitHub</button>
+    <button type="button" data-home-url="https://chatgpt.com/">ChatGPT</button>
+  </div>
+  <div class="homeGrid">
+    <section class="homeCard" aria-labelledby="bookmarksHeading">
+      <div class="homeCardHeading"><h3 id="bookmarksHeading">Bookmarks</h3><button id="bookmarkCurrentButton" type="button" class="secondary" disabled>☆ Save page</button></div>
+      <div id="bookmarkList" class="homeList"><div class="homeEmpty">Your saved pages will appear here.</div></div>
+    </section>
+    <section class="homeCard" aria-labelledby="historyHeading">
+      <div class="homeCardHeading"><h3 id="historyHeading">Recently visited</h3><button id="clearHistory" type="button" class="secondary">Clear history</button></div>
+      <div id="historyList" class="homeList"><div class="homeEmpty">Your history will appear here.</div></div>
+    </section>
+    <section class="homeCard" aria-labelledby="downloadsHeading">
+      <div class="homeCardHeading"><h3 id="downloadsHeading">Downloads</h3><button id="openDownloadsFolder" type="button" class="secondary">Open folder</button></div>
+      <div id="downloadList" class="homeList"><div class="homeEmpty">Downloaded files and progress will appear here.</div></div>
+    </section>
+  </div>
+  <p class="homeFootnote">Browser data is stored locally. Website sign-in sessions are kept in persistent browser profiles. Website permissions are blocked until you approve them.</p>
+</section>
 <section class="panel">
   <span class="pill">STEP 1 · COUNCIL TASK</span><h2>Run a shared AI council</h2>
   <p class="muted">Each round sends the same task and only the previous rounds' collected replies to the selected AI websites. After responses arrive, record the Director and Lead Coder gates. The next round stays locked until both gates approve. User final approval is a separate, explicit decision.</p>
@@ -110,7 +174,7 @@ footer{color:#7f89a5;text-align:center;font-size:12px;padding:18px}
 </section>
 <section class="panel" style="margin-top:18px"><h2>Collected replies · shared transcript</h2><p class="muted">Replies are tagged by AI and round, with explicit approval records. Only previous-round replies are sent as context in the next shared round.</p><div class="toolbar"><button id="copyTranscript">Copy shared transcript</button><button id="export">Export transcript (.txt)</button></div><pre id="transcript" class="status"></pre></section>
 </main>
-<footer>SUDHIT Browser · local shared transcript · best-effort website automation</footer>
+<footer>SUDHIT Browser · local browser data · website automation is best-effort</footer>
 <script src="renderer.js"></script>
 </body>
 </html>

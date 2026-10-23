@@ -1,4 +1,6 @@
-const { app, BrowserWindow, WebContentsView, session, ipcMain } = require("electron");
+const { app, BrowserWindow, WebContentsView, session, ipcMain, dialog, shell, Menu, clipboard } = require("electron");
+const { BrowserStore } = require("./browser-store");
+const { randomUUID } = require("node:crypto");
 const path = require("node:path");
 const { PROVIDERS, makeSendScript, makeReadScript } = require("./ai-automation");
 const {
@@ -19,6 +21,9 @@ const providerTabIds = new Map();
 const submittedPrompts = new Map();
 const baselineReplies = new Map();
 const configuredSessions = new WeakSet();
+const downloadSessions = new WeakSet();
+const sessionPermissionGrants = new WeakMap();
+let browserStore = null;
 
 function notify(message, detail = {}) {
   if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
@@ -35,6 +40,265 @@ function normalizeTitle(value, fallback) {
   return title || fallback;
 }
 
+
+function notifyHomeState() {
+  if (!browserStore || !mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  try { mainWindow.webContents.send("browser:home-state", browserStore.getHomeState()); } catch {}
+}
+
+function permissionGrantSet(ses) {
+  let grants = sessionPermissionGrants.get(ses);
+  if (!grants) {
+    grants = new Set();
+    sessionPermissionGrants.set(ses, grants);
+  }
+  return grants;
+}
+
+function normalizeOrigin(contents, requestingOrigin = "") {
+  try {
+    const origin = new URL(requestingOrigin || contents?.getURL() || "").origin;
+    return origin === "null" ? "" : origin;
+  } catch {
+    return "";
+  }
+}
+
+function permissionDescription(permission, details = {}) {
+  if (permission === "media") {
+    const types = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+    if (types.includes("video") && types.includes("audio")) return "camera and microphone";
+    if (types.includes("video")) return "camera";
+    if (types.includes("audio")) return "microphone";
+    return "camera or microphone";
+  }
+  const names = {
+    notifications: "notifications",
+    geolocation: "location",
+    "clipboard-read": "clipboard reading",
+    "clipboard-sanitized-write": "clipboard access",
+    midi: "MIDI devices",
+    midiSysex: "MIDI device access",
+    pointerLock: "pointer lock",
+    fullscreen: "full-screen mode"
+  };
+  return names[permission] || "";
+}
+
+async function askForSitePermission(ses, contents, permission, details = {}) {
+  const description = permissionDescription(permission, details);
+  const origin = normalizeOrigin(contents, details.requestingUrl || "");
+  if (!description || !origin || !/^https?:/i.test(origin) || !mainWindow || mainWindow.isDestroyed()) return false;
+  const grants = permissionGrantSet(ses);
+  const key = origin + "\u0000" + permission;
+  if (grants.has(key)) return true;
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    title: "Website permission",
+    message: "Allow " + description + " for this website?",
+    detail: origin + "\n\nThis permission is allowed only for the current SUDHIT session. Block is the safer default.",
+    buttons: ["Block", "Allow once"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  if (result.response !== 1) return false;
+  grants.add(key);
+  notify("Permission allowed for this session: " + description + " · " + origin);
+  return true;
+}
+
+function saveDownloadState(info, patch = {}) {
+  Object.assign(info, patch);
+  try {
+    if (browserStore) Object.assign(info, browserStore.upsertDownload(info));
+  } catch (error) {
+    notify("Could not save download history: " + error.message);
+  }
+  notifyHomeState();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("browser:download-progress", {
+      id: info.id, filename: info.filename, status: info.status,
+      receivedBytes: info.receivedBytes, totalBytes: info.totalBytes, progress: info.progress
+    });
+  }
+}
+
+function registerDownloadHandling(ses) {
+  if (downloadSessions.has(ses)) return;
+  downloadSessions.add(ses);
+  ses.on("will-download", (_event, item) => {
+    const filename = path.basename(String(item.getFilename() || "download")).slice(0, 240) || "download";
+    const info = {
+      id: randomUUID(), filename, url: item.getURL(), filePath: "",
+      status: "choosing-location", receivedBytes: 0, totalBytes: Number(item.getTotalBytes()) || 0,
+      progress: 0, startedAt: Date.now(), finishedAt: null
+    };
+    saveDownloadState(info);
+    try { item.pause(); } catch {}
+    const options = {
+      title: "Save download",
+      defaultPath: path.join(app.getPath("downloads"), filename),
+      buttonLabel: "Save"
+    };
+    const choosePath = mainWindow && !mainWindow.isDestroyed()
+      ? dialog.showSaveDialog(mainWindow, options)
+      : dialog.showSaveDialog(options);
+
+    choosePath.then(({ canceled, filePath }) => {
+      if (canceled || !filePath) {
+        try { item.cancel(); } catch {}
+        saveDownloadState(info, { status: "cancelled", finishedAt: Date.now() });
+        notify("Download cancelled.");
+        return;
+      }
+      info.filePath = filePath;
+      saveDownloadState(info, { status: "in-progress" });
+      item.on("updated", () => {
+        const receivedBytes = Number(item.getReceivedBytes()) || 0;
+        const totalBytes = Number(item.getTotalBytes()) || 0;
+        saveDownloadState(info, {
+          receivedBytes,
+          totalBytes,
+          progress: totalBytes > 0 ? Math.floor(Math.min(100, receivedBytes / totalBytes * 100)) : 0,
+          status: item.isPaused() ? "in-progress" : "in-progress"
+        });
+      });
+      item.once("done", (_doneEvent, state) => {
+        const status = state === "completed" ? "completed" : state === "cancelled" ? "cancelled" : "interrupted";
+        const totalBytes = Number(item.getTotalBytes()) || info.totalBytes;
+        saveDownloadState(info, {
+          status,
+          totalBytes,
+          receivedBytes: Number(item.getReceivedBytes()) || info.receivedBytes,
+          progress: status === "completed" ? 100 : info.progress,
+          filePath: item.getSavePath() || info.filePath,
+          finishedAt: Date.now()
+        });
+        notify(status === "completed" ? "Download finished: " + info.filename : "Download " + status + ": " + info.filename);
+      });
+      try { item.setSavePath(filePath); item.resume(); }
+      catch (error) {
+        try { item.cancel(); } catch {}
+        saveDownloadState(info, { status: "interrupted", finishedAt: Date.now() });
+        notify("Could not start download: " + error.message);
+      }
+    }).catch((error) => {
+      try { item.cancel(); } catch {}
+      saveDownloadState(info, { status: "interrupted", finishedAt: Date.now() });
+      notify("Could not choose a download location: " + error.message);
+    });
+  });
+}
+
+function recordBrowserVisit(tab, url = tab?.url) {
+  if (!browserStore || !url || !safeWebUrl(url)) return;
+  try {
+    browserStore.recordVisit(url, tab.title);
+    notifyHomeState();
+  } catch (error) {
+    notify("Could not save browser history: " + error.message);
+  }
+}
+
+function activeBrowserTab() {
+  const tab = tabs.get(activeTabId);
+  return tab && !tab.view.webContents.isDestroyed() ? tab : null;
+}
+
+async function openUrlInNewTab(input, partition = "persist:sudhit-browser") {
+  let url;
+  try { url = normalizeBrowserUrl(input); }
+  catch (error) { return { ok: false, message: error.message }; }
+  try {
+    const tab = await createTab({ title: new URL(url).hostname, url, partition, activate: true });
+    return { ok: !tab.loadError, tabId: tab.id, url: tab.url, message: tab.loadError || "New browser tab opened." };
+  } catch (error) {
+    return { ok: false, message: error.message };
+  }
+}
+
+async function bookmarkCurrentTab(tabId = activeTabId) {
+  const tab = tabs.get(tabId);
+  if (!tab || tab.view.webContents.isDestroyed()) return { ok: false, message: "Open a website tab before bookmarking." };
+  if (!browserStore) return { ok: false, message: "Bookmark storage is not ready." };
+  try {
+    const result = browserStore.addBookmark(tab.url, tab.title);
+    notifyHomeState();
+    notify(result.existed ? "Bookmark updated." : "Page bookmarked.");
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, message: error.message };
+  }
+}
+
+function showTabContextMenu(tab, params) {
+  const contents = tab.view.webContents;
+  const template = [];
+  if (params.linkURL) {
+    if (safeWebUrl(params.linkURL)) {
+      template.push({ label: "Open link in new tab", click: () => { void openUrlInNewTab(params.linkURL, tab.partition); } });
+      template.push({ label: "Copy link address", click: () => clipboard.writeText(params.linkURL) });
+    } else if (/^(mailto:|tel:)/i.test(params.linkURL)) {
+      template.push({ label: "Open link externally", click: () => { void shell.openExternal(params.linkURL); } });
+    }
+    template.push({ type: "separator" });
+  }
+  if (params.isEditable) {
+    template.push({ role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }, { type: "separator" });
+  } else if (params.selectionText) {
+    template.push({ label: "Copy selection", role: "copy" }, { type: "separator" });
+  }
+  template.push(
+    { label: "Back", enabled: contents.navigationHistory.canGoBack(), click: () => contents.navigationHistory.goBack() },
+    { label: "Forward", enabled: contents.navigationHistory.canGoForward(), click: () => contents.navigationHistory.goForward() },
+    { label: "Reload", click: () => contents.reload() },
+    { type: "separator" },
+    { label: "Print…", click: () => contents.print() },
+    { label: "Home", click: () => activateTab(COUNCIL_TAB_ID) }
+  );
+  Menu.buildFromTemplate(template).popup({ window: mainWindow });
+}
+
+function installApplicationMenu() {
+  const template = [
+    { label: "File", submenu: [
+      { label: "New tab", accelerator: "CmdOrCtrl+T", click: () => { void openUrlInNewTab("https://www.google.com/"); } },
+      { label: "Close tab", accelerator: "CmdOrCtrl+W", click: () => { if (activeTabId !== COUNCIL_TAB_ID) removeTab(activeTabId); } },
+      { label: "Focus address bar", accelerator: "CmdOrCtrl+L", click: () => mainWindow?.webContents.send("browser:command", "focus-address") },
+      { type: "separator" },
+      { label: "Downloads", accelerator: "CmdOrCtrl+J", click: () => { void shell.openPath(app.getPath("downloads")); } },
+      { type: "separator" },
+      { role: "quit" }
+    ]},
+    { label: "Edit", submenu: [
+      { role: "undo" }, { role: "redo" }, { type: "separator" },
+      { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }
+    ]},
+    { label: "View", submenu: [
+      { label: "Home / history / bookmarks", accelerator: "CmdOrCtrl+H", click: () => activateTab(COUNCIL_TAB_ID) },
+      { label: "Back", accelerator: "Alt+Left", click: () => { const tab = activeBrowserTab(); if (tab?.view.webContents.navigationHistory.canGoBack()) tab.view.webContents.navigationHistory.goBack(); } },
+      { label: "Forward", accelerator: "Alt+Right", click: () => { const tab = activeBrowserTab(); if (tab?.view.webContents.navigationHistory.canGoForward()) tab.view.webContents.navigationHistory.goForward(); } },
+      { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => { activeBrowserTab()?.view.webContents.reload(); } },
+      { type: "separator" },
+      { label: "Zoom in", accelerator: "CmdOrCtrl+Plus", click: () => { const tab = activeBrowserTab(); if (tab) tab.view.webContents.setZoomLevel(Math.min(3, tab.view.webContents.getZoomLevel() + 0.5)); } },
+      { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { const tab = activeBrowserTab(); if (tab) tab.view.webContents.setZoomLevel(Math.max(-3, tab.view.webContents.getZoomLevel() - 0.5)); } },
+      { label: "Reset zoom", accelerator: "CmdOrCtrl+0", click: () => activeBrowserTab()?.view.webContents.setZoomLevel(0) },
+      { type: "separator" },
+      { role: "togglefullscreen" }
+    ]},
+    { label: "Bookmarks", submenu: [
+      { label: "Bookmark current page", accelerator: "CmdOrCtrl+D", click: () => { void bookmarkCurrentTab(); } },
+      { label: "Show bookmarks", click: () => activateTab(COUNCIL_TAB_ID) }
+    ]},
+    { label: "Help", submenu: [
+      { label: "About SUDHIT Browser", click: () => { void dialog.showMessageBox(mainWindow, { type: "info", title: "About SUDHIT Browser", message: "SUDHIT Browser", detail: "A Chromium-based desktop browser. Browser data is stored locally on this device." }); } }
+    ]}
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+
 function getBrowserState() {
   const browserTabs = [];
   for (const tab of tabs.values()) {
@@ -44,6 +308,7 @@ function getBrowserState() {
       title: tab.title,
       url: tab.url,
       providerId: tab.providerId || null,
+      isBookmarked: Boolean(browserStore && browserStore.findBookmark(tab.url)),
       canGoBack: tab.view.webContents.navigationHistory.canGoBack(),
       canGoForward: tab.view.webContents.navigationHistory.canGoForward(),
       loading: tab.view.webContents.isLoading()
@@ -98,8 +363,14 @@ function activateTab(id) {
 function ensureSessionSafe(partition) {
   const ses = session.fromPartition(partition);
   if (!configuredSessions.has(ses)) {
-    ses.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-    ses.setPermissionCheckHandler(() => false);
+    ses.setPermissionRequestHandler((contents, permission, callback, details) => {
+      askForSitePermission(ses, contents, permission, details || {}).then(callback).catch(() => callback(false));
+    });
+    ses.setPermissionCheckHandler((contents, permission, requestingOrigin) => {
+      const origin = normalizeOrigin(contents, requestingOrigin || "");
+      return Boolean(origin && permissionGrantSet(ses).has(origin + "\u0000" + permission));
+    });
+    registerDownloadHandling(ses);
     configuredSessions.add(ses);
   }
   return ses;
@@ -109,15 +380,18 @@ function attachTabHandlers(tab) {
   const contents = tab.view.webContents;
   contents.on("did-navigate", (_event, url) => {
     tab.url = url;
+    recordBrowserVisit(tab, url);
     notifyBrowserChanged();
   });
   contents.on("did-navigate-in-page", (_event, url) => {
     tab.url = url;
+    recordBrowserVisit(tab, url);
     notifyBrowserChanged();
   });
   contents.on("page-title-updated", (event, title) => {
     event.preventDefault();
     tab.title = normalizeTitle(title, tab.providerId ? PROVIDERS[tab.providerId].label : "New Tab");
+    recordBrowserVisit(tab, tab.url);
     notifyBrowserChanged();
   });
   contents.on("did-start-loading", () => notifyBrowserChanged());
@@ -129,21 +403,27 @@ function attachTabHandlers(tab) {
     if (!safeWebUrl(url)) event.preventDefault();
   });
   contents.setWindowOpenHandler(({ url }) => {
+    // OAuth pop-ups need a real opener relationship. Allow only the authentication domains
+    // commonly used by Google and Microsoft; other HTTP(S) pop-ups become browser tabs.
+    let host = "";
+    try { host = new URL(url).hostname.toLowerCase(); } catch {}
+    const authPopup = safeWebUrl(url) && (
+      host === "accounts.google.com" || host.endsWith(".accounts.google.com") ||
+      host === "login.microsoftonline.com" || host.endsWith(".login.microsoftonline.com")
+    );
+    if (authPopup) return { action: "allow" };
     if (safeWebUrl(url) && tabs.size < MAX_TABS) {
       setImmediate(() => {
-        void createTab({
-          title: "New Tab",
-          url,
-          partition: tab.partition,
-          providerId: null,
-          activate: true
-        });
+        void createTab({ title: "New Tab", url, partition: tab.partition, providerId: null, activate: true });
       });
+    } else if (/^(mailto:|tel:)/i.test(url)) {
+      setImmediate(() => { void shell.openExternal(url); });
     } else {
-      notify("Blocked an unsupported link or tab limit was reached.");
+      notify("Blocked an unsupported pop-up or tab limit was reached.");
     }
     return { action: "deny" };
   });
+  contents.on("context-menu", (_event, params) => showTabContextMenu(tab, params));
   contents.on("render-process-gone", (_event, details) => {
     notify("A website tab stopped unexpectedly (" + details.reason + "). Reload the tab or reopen it.");
   });
@@ -194,7 +474,9 @@ async function createTab({ id, title, url, partition = "persist:sudhit-browser",
     notifyBrowserChanged();
   } catch (error) {
     notify("Could not load " + url + ": " + error.message, { providerId });
-    removeTab(tab.id);
+    tab.title = "Page failed to load";
+    tab.loadError = error.message;
+    notifyBrowserChanged();
     return { ...tab, loadError: error.message };
   }
   return tab;
@@ -208,6 +490,7 @@ function removeTab(id) {
   }
   submittedPrompts.delete(tab.providerId || id);
   baselineReplies.delete(tab.providerId || id);
+  const wasActive = activeTabId === id;
   tabs.delete(id);
   try {
     mainWindow?.contentView?.removeChildView(tab.view);
@@ -215,7 +498,7 @@ function removeTab(id) {
   try {
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
   } catch {}
-  if (activeTabId === id) activeTabId = COUNCIL_TAB_ID;
+  if (wasActive) activeTabId = [...tabs.keys()].pop() || COUNCIL_TAB_ID;
   layoutBrowserViews();
   notifyBrowserChanged();
   return { ok: true, activeTabId };
@@ -237,6 +520,7 @@ function createMainWindow() {
     }
   });
   mainWindow.loadFile(path.join(__dirname, "index.html"));
+  installApplicationMenu();
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const dashboardUrl = require("node:url").pathToFileURL(path.join(__dirname, "index.html")).href;
   mainWindow.webContents.on("will-navigate", (event, url) => {
@@ -620,7 +904,45 @@ handle("browser:reload", async (id) => {
 });
 handle("browser:close-tab", async (id) => removeTab(id));
 
+handle("browser:get-home-state", async () => browserStore ? browserStore.getHomeState() : { bookmarks: [], history: [], downloads: [] });
+handle("browser:bookmark-current", async (id) => bookmarkCurrentTab(id || activeTabId));
+handle("browser:remove-bookmark", async (idOrUrl) => {
+  if (!browserStore) return { ok: false, message: "Bookmark storage is not ready." };
+  const removed = browserStore.removeBookmark(String(idOrUrl || ""));
+  notifyHomeState();
+  return { ok: removed, message: removed ? "Bookmark removed." : "Bookmark was not found." };
+});
+handle("browser:open-bookmark", async (url) => openUrlInNewTab(url));
+handle("browser:clear-history", async () => {
+  try {
+    browserStore?.clearHistory();
+    notifyHomeState();
+    return { ok: true, message: "Browsing history cleared." };
+  } catch (error) {
+    return { ok: false, message: "Could not clear history: " + error.message };
+  }
+});
+handle("browser:show-home", async () => activateTab(COUNCIL_TAB_ID));
+handle("browser:open-download", async (id) => {
+  const item = browserStore?.getDownload(id);
+  if (!item || item.status !== "completed" || !item.filePath) return { ok: false, message: "That download is not available as a completed file." };
+  const error = await shell.openPath(item.filePath);
+  return error ? { ok: false, message: error } : { ok: true };
+});
+handle("browser:reveal-download", async (id) => {
+  const item = browserStore?.getDownload(id);
+  if (!item || item.status !== "completed" || !item.filePath) return { ok: false, message: "That download is not available as a completed file." };
+  shell.showItemInFolder(item.filePath);
+  return { ok: true };
+});
+handle("browser:open-downloads-folder", async () => {
+  const error = await shell.openPath(app.getPath("downloads"));
+  return error ? { ok: false, message: error } : { ok: true };
+});
+
+
 app.whenReady().then(() => {
+  browserStore = new BrowserStore(app.getPath("userData"));
   createMainWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

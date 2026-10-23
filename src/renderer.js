@@ -15,6 +15,8 @@ let taskRevision = 0;
 let browserState = { activeTabId: "council", tabs: [], councilActive: true };
 let runActive = false;
 let lastTaskValue = "";
+let browserHomeState = { bookmarks: [], history: [], downloads: [] };
+let homeRefreshTimer = null;
 
 function requireCouncilRulesFallback() {
   return {
@@ -275,6 +277,13 @@ function buildCouncilPrompt() {
 function renderBrowserState(state) {
   if (!state) return;
   browserState = state;
+  document.body.classList.toggle("browser-home-active", Boolean(state.councilActive));
+  const currentForBookmark = (state.tabs || []).find((tab) => tab.id === state.activeTabId);
+  const bookmarkButton = document.getElementById("browserBookmarkButton");
+  bookmarkButton.disabled = !currentForBookmark;
+  bookmarkButton.textContent = currentForBookmark?.isBookmarked ? "★" : "☆";
+  bookmarkButton.title = currentForBookmark?.isBookmarked ? "Bookmark already saved" : "Bookmark current page";
+  document.getElementById("bookmarkCurrentButton").disabled = !currentForBookmark;
   const newTabButton = document.getElementById("newBrowserTab");
   browserTabsEl.replaceChildren();
   const council = document.createElement("button");
@@ -283,7 +292,7 @@ function renderBrowserState(state) {
   council.setAttribute("role", "tab");
   council.setAttribute("aria-selected", state.activeTabId === "council" ? "true" : "false");
   council.dataset.tabId = "council";
-  council.textContent = "SUDHIT Council";
+  council.textContent = "Home";
   council.addEventListener("click", async () => {
     const result = await window.sudhitAI.activateBrowserTab("council");
     if (result.ok) browserStatusEl.textContent = "Council dashboard active.";
@@ -331,7 +340,151 @@ function renderBrowserState(state) {
   if (document.activeElement !== browserAddressEl) browserAddressEl.value = current ? current.url : "";
   browserStatusEl.textContent = current
     ? (current.loading ? "Loading " + current.url : current.title + " · " + current.url)
-    : "Council dashboard active · open an AI tab or create a new browser tab";
+    : "Home · search, bookmarks, history, and downloads";
+  if (state.councilActive) scheduleBrowserHomeRefresh();
+}
+
+
+function humanBytes(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+}
+
+function renderHomeListEmpty(container, message) {
+  const empty = document.createElement("div");
+  empty.className = "homeEmpty";
+  empty.textContent = message;
+  container.appendChild(empty);
+}
+
+function createHomeRow(title, detail) {
+  const row = document.createElement("div");
+  row.className = "homeListItem";
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "homeOpen";
+  open.textContent = title || "Website";
+  const meta = document.createElement("span");
+  meta.className = "homeMeta";
+  meta.textContent = detail || "";
+  open.appendChild(meta);
+  row.appendChild(open);
+  return { row, open };
+}
+
+function renderBrowserHome(data) {
+  browserHomeState = data && typeof data === "object"
+    ? data
+    : { bookmarks: [], history: [], downloads: [] };
+
+  const bookmarkList = document.getElementById("bookmarkList");
+  bookmarkList.replaceChildren();
+  const bookmarks = Array.isArray(browserHomeState.bookmarks) ? browserHomeState.bookmarks : [];
+  if (!bookmarks.length) renderHomeListEmpty(bookmarkList, "No bookmarks yet. Open a page and press ☆ to save it.");
+  for (const item of bookmarks.slice(0, 12)) {
+    const { row, open } = createHomeRow(item.title || "Saved page", item.url);
+    open.addEventListener("click", async () => {
+      const result = await window.sudhitAI.openBookmark(item.url);
+      if (!result.ok) browserStatusEl.textContent = result.message || "Could not open bookmark.";
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "homeRemove";
+    remove.textContent = "×";
+    remove.title = "Remove bookmark";
+    remove.setAttribute("aria-label", "Remove bookmark " + (item.title || item.url));
+    remove.addEventListener("click", async () => {
+      const result = await window.sudhitAI.removeBookmark(item.id);
+      browserStatusEl.textContent = result.message || (result.ok ? "Bookmark removed." : "Could not remove bookmark.");
+      await refreshBrowserHome();
+    });
+    row.appendChild(remove);
+    bookmarkList.appendChild(row);
+  }
+
+  const historyList = document.getElementById("historyList");
+  historyList.replaceChildren();
+  const history = Array.isArray(browserHomeState.history) ? browserHomeState.history : [];
+  if (!history.length) renderHomeListEmpty(historyList, "No browsing history yet.");
+  for (const item of history.slice(0, 10)) {
+    const detailDate = item.visitedAt ? new Date(item.visitedAt).toLocaleString() : "";
+    const { row, open } = createHomeRow(item.title || "Visited page", (item.url || "") + (detailDate ? " · " + detailDate : ""));
+    open.addEventListener("click", async () => {
+      const result = await window.sudhitAI.newBrowserTab(item.url);
+      if (!result.ok) browserStatusEl.textContent = result.message || "Could not open this history entry.";
+    });
+    historyList.appendChild(row);
+  }
+
+  const downloadList = document.getElementById("downloadList");
+  downloadList.replaceChildren();
+  const downloads = Array.isArray(browserHomeState.downloads) ? browserHomeState.downloads : [];
+  if (!downloads.length) renderHomeListEmpty(downloadList, "No downloads yet.");
+  for (const item of downloads.slice(0, 8)) {
+    const status = item.status === "completed" ? "Completed" :
+      item.status === "in-progress" ? "Downloading · " + humanBytes(item.receivedBytes) + (item.totalBytes ? " / " + humanBytes(item.totalBytes) : "") :
+      item.status === "choosing-location" ? "Choose save location…" :
+      item.status === "cancelled" ? "Cancelled" : "Interrupted";
+    const { row, open } = createHomeRow(item.filename || "Download", status);
+    if (item.status === "completed") {
+      open.addEventListener("click", async () => {
+        const result = await window.sudhitAI.openDownload(item.id);
+        if (!result.ok) browserStatusEl.textContent = result.message || "Could not open file.";
+      });
+      const reveal = document.createElement("button");
+      reveal.type = "button";
+      reveal.className = "homeRemove";
+      reveal.textContent = "Folder";
+      reveal.title = "Show downloaded file in its folder";
+      reveal.addEventListener("click", async () => {
+        const result = await window.sudhitAI.revealDownload(item.id);
+        if (!result.ok) browserStatusEl.textContent = result.message || "Could not reveal file.";
+      });
+      row.appendChild(reveal);
+    } else {
+      open.disabled = true;
+      open.title = "This download is not yet complete";
+      const progress = document.createElement("div");
+      progress.className = "homeProgress";
+      const fill = document.createElement("span");
+      fill.style.width = Math.max(0, Math.min(100, Number(item.progress) || 0)) + "%";
+      progress.appendChild(fill);
+      row.appendChild(progress);
+    }
+    downloadList.appendChild(row);
+  }
+}
+
+async function refreshBrowserHome() {
+  if (!window.sudhitAI?.getBrowserHomeState) return;
+  try { renderBrowserHome(await window.sudhitAI.getBrowserHomeState()); }
+  catch (error) { browserStatusEl.textContent = "Could not load bookmarks or history: " + error.message; }
+}
+
+function scheduleBrowserHomeRefresh() {
+  if (homeRefreshTimer) clearTimeout(homeRefreshTimer);
+  homeRefreshTimer = setTimeout(() => {
+    homeRefreshTimer = null;
+    void refreshBrowserHome();
+  }, 120);
+}
+
+async function openFromHome(input) {
+  const value = String(input || "").trim();
+  if (!value) {
+    document.getElementById("homeSearchInput").focus();
+    return;
+  }
+  const result = await window.sudhitAI.newBrowserTab(value);
+  if (!result.ok) {
+    browserStatusEl.textContent = result.message || "Could not open that address.";
+    return;
+  }
+  document.getElementById("homeSearchInput").value = "";
+  browserStatusEl.textContent = "Opening " + (result.url || value);
 }
 
 async function refreshProviders() {
@@ -651,6 +804,54 @@ document.getElementById("browserBack").addEventListener("click", () => window.su
 document.getElementById("browserForward").addEventListener("click", () => window.sudhitAI.forward(browserState.activeTabId));
 document.getElementById("browserReload").addEventListener("click", () => window.sudhitAI.reload(browserState.activeTabId));
 
+
+
+document.getElementById("browserHomeButton").addEventListener("click", () => {
+  void window.sudhitAI.showBrowserHome();
+});
+
+document.getElementById("browserBookmarkButton").addEventListener("click", async () => {
+  const tabId = browserState.activeTabId;
+  const result = await window.sudhitAI.bookmarkCurrentTab(tabId);
+  browserStatusEl.textContent = result.message || (result.ok ? "Page bookmarked." : "Could not bookmark page.");
+  if (result.ok) await refreshBrowserHome();
+});
+
+document.getElementById("bookmarkCurrentButton").addEventListener("click", async () => {
+  const result = await window.sudhitAI.bookmarkCurrentTab(browserState.activeTabId);
+  browserStatusEl.textContent = result.message || (result.ok ? "Page bookmarked." : "Could not bookmark page.");
+  if (result.ok) await refreshBrowserHome();
+});
+
+document.getElementById("homeSearchForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await openFromHome(document.getElementById("homeSearchInput").value);
+});
+
+for (const button of document.querySelectorAll("[data-home-url]")) {
+  button.addEventListener("click", () => { void openFromHome(button.dataset.homeUrl); });
+}
+
+document.getElementById("clearHistory").addEventListener("click", async () => {
+  if (!confirm("Clear browsing history saved by SUDHIT Browser? Bookmarks and login sessions will remain.")) return;
+  const result = await window.sudhitAI.clearBrowserHistory();
+  browserStatusEl.textContent = result.message || (result.ok ? "History cleared." : "Could not clear history.");
+  await refreshBrowserHome();
+});
+
+document.getElementById("openDownloadsFolder").addEventListener("click", async () => {
+  const result = await window.sudhitAI.openDownloadsFolder();
+  if (!result.ok) browserStatusEl.textContent = result.message || "Could not open downloads folder.";
+});
+
+if (window.sudhitAI?.onHomeState) window.sudhitAI.onHomeState((state) => renderBrowserHome(state));
+if (window.sudhitAI?.onCommand) window.sudhitAI.onCommand((command) => {
+  if (command === "focus-address") {
+    browserAddressEl.focus();
+    browserAddressEl.select();
+  }
+});
+
 if (window.sudhitAI?.onProgress) {
   window.sudhitAI.onProgress((detail) => {
     if (detail?.message) mainStatus.textContent = detail.message;
@@ -667,3 +868,4 @@ if (window.sudhitAI?.onBrowserChanged) {
 
 render();
 refreshProviders();
+refreshBrowserHome();

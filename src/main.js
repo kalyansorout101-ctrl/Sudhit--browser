@@ -280,6 +280,14 @@ function installApplicationMenu() {
       { label: "Back", accelerator: "Alt+Left", click: () => { const tab = activeBrowserTab(); if (tab?.view.webContents.navigationHistory.canGoBack()) tab.view.webContents.navigationHistory.goBack(); } },
       { label: "Forward", accelerator: "Alt+Right", click: () => { const tab = activeBrowserTab(); if (tab?.view.webContents.navigationHistory.canGoForward()) tab.view.webContents.navigationHistory.goForward(); } },
       { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => { activeBrowserTab()?.view.webContents.reload(); } },
+      { label: "Next tab", accelerator: "Ctrl+Tab", click: () => activateRelativeTab(1) },
+      { label: "Previous tab", accelerator: "Ctrl+Shift+Tab", click: () => activateRelativeTab(-1) },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        label: "Switch to tab " + (index + 1),
+        accelerator: "CmdOrCtrl+" + (index + 1),
+        click: () => activateTabByNumber(index + 1)
+      })),
+      { label: "Switch to last tab", accelerator: "CmdOrCtrl+9", click: () => activateTabByNumber(9) },
       { type: "separator" },
       { label: "Zoom in", accelerator: "CmdOrCtrl+Plus", click: () => { const tab = activeBrowserTab(); if (tab) tab.view.webContents.setZoomLevel(Math.min(3, tab.view.webContents.getZoomLevel() + 0.5)); } },
       { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { const tab = activeBrowserTab(); if (tab) tab.view.webContents.setZoomLevel(Math.max(-3, tab.view.webContents.getZoomLevel() - 0.5)); } },
@@ -358,6 +366,22 @@ function activateTab(id) {
   if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.focus();
   notifyBrowserChanged();
   return { ok: true, activeTabId };
+}
+
+function activateRelativeTab(direction) {
+  const ids = [...tabs.keys()];
+  if (!ids.length) return activateTab(COUNCIL_TAB_ID);
+  const currentIndex = ids.indexOf(activeTabId);
+  const startIndex = currentIndex < 0 ? (direction > 0 ? -1 : 0) : currentIndex;
+  const nextIndex = (startIndex + direction + ids.length) % ids.length;
+  return activateTab(ids[nextIndex]);
+}
+
+function activateTabByNumber(number) {
+  const ids = [...tabs.keys()];
+  if (!ids.length) return activateTab(COUNCIL_TAB_ID);
+  const id = number === 9 ? ids[ids.length - 1] : ids[number - 1];
+  return id ? activateTab(id) : { ok: false, message: "That tab number is not open." };
 }
 
 function ensureSessionSafe(partition) {

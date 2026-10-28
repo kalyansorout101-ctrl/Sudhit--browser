@@ -4,7 +4,7 @@ Electron desktop prototype for the SUDHIT multi-AI council.
 
 ## Current milestone: website reply collection preview
 
-- Opens separate ChatGPT, Claude, and Grok website windows.
+- Opens separate ChatGPT (director), Claude (assistant coder), Grok (lead coder), and Gemini (designer) website windows.
 - Uses an isolated persistent browser profile per provider, so website sign-in sessions can persist locally.
 - Provides explicit controls to open/focus a website, send the council task, collect the latest visible reply, or run a multi-site send-and-collect round.
 - Sends a shared transcript with prior collected replies in later rounds.

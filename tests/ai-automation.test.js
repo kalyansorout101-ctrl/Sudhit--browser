@@ -24,6 +24,16 @@ test("generated prompt submission scripts parse for each supported provider", ()
   }
 });
 
+test("Gemini uses a provider-specific composer branch and response selectors", () => {
+  const send = makeSendScript("gemini", "design a home screen");
+  const read = makeReadScript("gemini", "design a home screen");
+  assert.ok(send.includes('"gemini" === "gemini"'));
+  assert.ok(!send.includes('providerId === "gemini"'), "generated page script must not reference an undefined host variable");
+  assert.ok(send.includes("rich-textarea [contenteditable='true']"));
+  assert.ok(read.includes("model-response"));
+  assert.ok(read.includes('preferred["gemini"]'));
+});
+
 test("generated response collection scripts parse and include provider-specific selectors", () => {
   for (const [id, provider] of Object.entries(PROVIDERS)) {
     const script = makeReadScript(id, "test prompt");

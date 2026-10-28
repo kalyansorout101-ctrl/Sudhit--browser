@@ -25,7 +25,7 @@ function makeSendScript(providerId, prompt) {
         (credentialFields.length && loginCopy)) {
       return { ok: false, message: "This page looks like a sign-in or verification screen. Complete it manually in the AI window, then retry." };
     }
-    const selectors = providerId === "gemini" ? [
+    const selectors = ${JSON.stringify(providerId)} === "gemini" ? [
       "rich-textarea [contenteditable='true']",
       "rich-textarea textarea",
       "[contenteditable='true'][aria-label*='prompt' i]",

@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const { PROVIDERS, makeSendScript, makeReadScript } = require("../src/ai-automation");
 
 test("supported AI sites use HTTPS and separate persistent profiles", () => {
-  assert.deepEqual(Object.keys(PROVIDERS).sort(), ["chatgpt", "claude", "grok"]);
+  assert.deepEqual(Object.keys(PROVIDERS).sort(), ["chatgpt", "claude", "gemini", "grok"]);
+  assert.equal(PROVIDERS.gemini.url, "https://gemini.google.com/app");
+  assert.equal(PROVIDERS.gemini.partition, "persist:sudhit-gemini");
   const partitions = new Set();
   for (const provider of Object.values(PROVIDERS)) {
     assert.equal(new URL(provider.url).protocol, "https:");

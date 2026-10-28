@@ -1,7 +1,8 @@
 const PROVIDERS = Object.freeze({
   chatgpt: { id: "chatgpt", label: "ChatGPT", url: "https://chatgpt.com/", partition: "persist:sudhit-chatgpt" },
   claude: { id: "claude", label: "Claude", url: "https://claude.ai/new", partition: "persist:sudhit-claude" },
-  grok: { id: "grok", label: "Grok", url: "https://grok.com/", partition: "persist:sudhit-grok" }
+  grok: { id: "grok", label: "Grok", url: "https://grok.com/", partition: "persist:sudhit-grok" },
+  gemini: { id: "gemini", label: "Gemini", url: "https://gemini.google.com/app", partition: "persist:sudhit-gemini" }
 });
 
 function visible(el) {
@@ -24,7 +25,13 @@ function makeSendScript(providerId, prompt) {
         (credentialFields.length && loginCopy)) {
       return { ok: false, message: "This page looks like a sign-in or verification screen. Complete it manually in the AI window, then retry." };
     }
-    const selectors = [
+    const selectors = providerId === "gemini" ? [
+      "rich-textarea [contenteditable='true']",
+      "rich-textarea textarea",
+      "[contenteditable='true'][aria-label*='prompt' i]",
+      "textarea[aria-label*='prompt' i]",
+      "[contenteditable='true'][role='textbox']"
+    ] : [
       "#prompt-textarea",
       "[data-testid='grok-composer'] [contenteditable='true']",
       "[contenteditable='true'][role='textbox']",
@@ -95,7 +102,8 @@ function makeReadScript(providerId, prompt) {
     const preferred = {
       chatgpt: ["[data-message-author-role='assistant']"],
       claude: ["[data-testid='assistant-message']", "[data-testid='chat-message'] .font-claude-message", ".font-claude-message", "div[class*='assistant-message']"],
-      grok: ["[data-testid='response-content']", "[data-testid='message-content']", "[data-testid='answer-content']", "div[class*='response-content']"]
+      grok: ["[data-testid='response-content']", "[data-testid='message-content']", "[data-testid='answer-content']", "div[class*='response-content']"],
+      gemini: ["model-response", "message-content", "model-response .markdown", "[data-message-author-role='model']"]
     };
     const fallback = ["main .prose", "main [class*='markdown']", "main article", "main [data-testid*='message']", "main [class*='message-content']"];
     const prompt = (sentPrompt || "").trim();

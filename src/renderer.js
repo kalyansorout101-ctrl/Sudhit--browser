@@ -3,7 +3,7 @@ const roundEl = document.getElementById("round");
 const transcriptEl = document.getElementById("transcript");
 const mainStatus = document.getElementById("mainStatus");
 const STORAGE_KEY = "sudhit-council-session-v1";
-const PROVIDER_LABELS = { chatgpt: "ChatGPT", claude: "Claude", grok: "Grok" };
+const PROVIDER_LABELS = { chatgpt: "ChatGPT", claude: "Claude", grok: "Grok", gemini: "Gemini" };
 let entries = [];
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");

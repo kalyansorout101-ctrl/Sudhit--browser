@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("node:path");
 const { PROVIDERS, makeSendScript, makeReadScript } = require("./ai-automation");
+const { makeRolePrompt } = require("./role-prompts");
 
 let mainWindow = null;
 const providerWindows = new Map();
@@ -74,6 +75,7 @@ async function openProvider(id) {
 }
 async function sendPrompt(id, prompt) {
   const provider = getProvider(id);
+  const providerPrompt = makeRolePrompt(id, prompt);
   const win = providerWindows.get(id);
   if (!win || win.isDestroyed()) return { ok: false, id, label: provider.label, message: "Open this AI website first, then sign in if required." };
   if (win.webContents.isLoading()) return { ok: false, id, label: provider.label, message: "The AI website is still loading. Try again in a moment." };
@@ -83,9 +85,9 @@ async function sendPrompt(id, prompt) {
       const before = await win.webContents.executeJavaScript(makeReadScript(id, submittedPrompts.get(id) || ""));
       baseline = (before.text || "").trim();
     } catch {}
-    const result = await win.webContents.executeJavaScript(makeSendScript(id, prompt));
+    const result = await win.webContents.executeJavaScript(makeSendScript(id, providerPrompt));
     if (result.ok) {
-      submittedPrompts.set(id, prompt);
+      submittedPrompts.set(id, providerPrompt);
       baselineReplies.set(id, baseline);
     }
     return { ...result, id, label: provider.label };
